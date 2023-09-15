@@ -1,0 +1,5 @@
+/Core/
+/Drivers/
+/cmake-build-*/
+.mxproject
+Makefile
