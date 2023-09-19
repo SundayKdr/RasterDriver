@@ -54,190 +54,203 @@ public:
     }
 
     void load_driver(StepperCfg &&cfg){
-        A = cfg.A;
-        Vmin = cfg.Vmin;
-        Vmax = cfg.Vmax;
-        criticalNofSteps = cfg.criticalNofSteps;
-        htim = cfg.htim;
-        timChannel = cfg.timChannel;
-        directionInverted = cfg.directionInverted;
-        timerDividend = SystemCoreClock/(htim->Instance->PSC);
+        A_ = cfg.A;
+        kVmin_ = cfg.Vmin;
+        kVmax_ = cfg.Vmax;
+        kCriticalNofSteps_ = cfg.criticalNofSteps;
+        htim_ = cfg.htim;
+        timChannel_ = cfg.timChannel;
+        directionInverted_ = cfg.directionInverted;
+        timerDividend_ = SystemCoreClock/(htim_->Instance->PSC);
     }
 
     void motor_refresh(){
-        if(mode == Mode::in_ERROR) return;
-        if(accelerationMode){
-            reCalcSpeed();
-            if(currentStep >= EXPO_DISTANCE_N_OF_STEPS)
-                changeDirection();
-            regValueCalc();
+        if(mode_ == Mode::in_ERROR) return;
+        if(accelerationMode_){
+            ReCalcSpeed();
+            if(currentStep_ >= kExpoDistanceSteps_)
+                ChangeDirection();
+            RegValueCalc_();
         }
         else{
-            currentStep++;
-            if(currentStep >= criticalNofSteps){
-                if(noReturn) stopMotor();
-                else changeDirection();
+            currentStep_++;
+            if(currentStep_ >= kCriticalNofSteps_){
+                if(noReturn_) StopMotor();
+                else ChangeDirection();
             }
         }
-        if(direction_changed > 1){
-            stopMotor();
-            mode = Mode::in_ERROR;
+        if(direction_changed_ > 1){
+            StopMotor();
+            mode_ = Mode::in_ERROR;
         }
     }
 
-    inline void get_position(Direction dir, bool noRet = false){
-        accelerationMode = false;
-        V = LOAD_UNLOAD_SPEED;
-        setDirection(dir);
-        if(noRet) noReturn = true;
-        startMotor();
+    void get_position(Direction dir, bool noRet = false){
+        accelerationMode_ = false;
+        V_ = kServiceSpeed_;
+        SetDirection(dir);
+        if(noRet) noReturn_ = true;
+        StartMotor_();
     }
 
-    inline void exposition(){
-        accelerationMode = true;
-        V = Vmin;
-        setDirection(Direction::FORWARD);
-        startMotor();
+    void Exposition(){
+        accelerationMode_ = true;
+        V_ = kVmin_;
+        SetDirection(Direction::FORWARD);
+        StartMotor_();
+        StepsCorrectionHack();
     }
 
-    inline void stopMotor(){
-        if(motorMoving){
-            HAL_TIM_PWM_Stop_IT(htim, timChannel);
-            enable.setValue(HIGH);
-            motorMoving = false;
-            mode = Mode::IDLE;
-            event = EVENT_STOP;
-            noReturn = false;
+    void EndSideStepsCorr(){
+        kCriticalNofSteps_ -= kReachSteps_;
+        ChangeDirection();
+    }
+
+    void StopMotor(){
+        if(motorMoving_){
+            HAL_TIM_PWM_Stop_IT(htim_, timChannel_);
+            enable_.setValue(HIGH);
+            motorMoving_ = false;
+            mode_ = Mode::IDLE;
+            event_ = EVENT_STOP;
+            noReturn_ = false;
         }
     }
 
-    inline void changeDirection(){
-        if(!accelerationMode) direction_changed += 1;
-        setDirection(static_cast<bool>(currentDirection) ? Direction::BACKWARDS : Direction::FORWARD);
-        currentStep = 0;
-        accel_step = 0;
-        mode = Mode::ACCEL;
+    void ChangeDirection(){
+        if(!accelerationMode_) direction_changed_ += 1;
+        SetDirection(static_cast<bool>(currentDirection_) ? Direction::BACKWARDS : Direction::FORWARD);
+        currentStep_ = 0;
+        accel_step_ = 0;
+        mode_ = Mode::ACCEL;
     }
 
-    inline bool isMotorMoving() const {
-        return motorMoving;
+    [[nodiscard]] bool IsMotorMoving() const {
+        return motorMoving_;
     }
 
-    inline Mode getMode() const {
-        return mode;
+    [[nodiscard]] Mode GetMode() const {
+        return mode_;
     }
 
-    inline MOTOR_EVENT getEvent() const {
-        return event;
+    [[nodiscard]] MOTOR_EVENT GetEvent() const {
+        return event_;
     }
 
-    inline Direction getCurrentDirection() const {
-        return currentDirection;
+    [[nodiscard]] Direction GetCurrentDirection() const {
+        return currentDirection_;
     }
 
-    inline bool noReturnMode() const {
-        return noReturn;
+    [[nodiscard]] bool NoReturnMode() const {
+        return noReturn_;
     }
 
 private:
-    MOTOR_IOS step = MOTOR_IOS(STEP_PIN, STEP_GPIO_Port, STEP_Pin);
-    MOTOR_IOS direction = MOTOR_IOS(DIR_PIN, DIR_GPIO_Port, DIR_Pin);
-    MOTOR_IOS enable = MOTOR_IOS(ENABLE_PIN, ENABLE_GPIO_Port, ENABLE_Pin);
-    MOTOR_IOS current = MOTOR_IOS(CURRENT_WIND, CURRENT_WIND_GPIO_Port, CURRENT_WIND_Pin);
-    TIM_HandleTypeDef *htim;
-    uint32_t timChannel;
-    uint32_t timerDividend;
+    MOTOR_IOS step_ = MOTOR_IOS(STEP_PIN, STEP_GPIO_Port, STEP_Pin);
+    MOTOR_IOS direction_ = MOTOR_IOS(DIR_PIN, DIR_GPIO_Port, DIR_Pin);
+    MOTOR_IOS enable_ = MOTOR_IOS(ENABLE_PIN, ENABLE_GPIO_Port, ENABLE_Pin);
+    MOTOR_IOS current_ = MOTOR_IOS(CURRENT_WIND, CURRENT_WIND_GPIO_Port, CURRENT_WIND_Pin);
+    TIM_HandleTypeDef *htim_;
+    uint32_t timChannel_;
+    uint32_t timerDividend_;
 
-    int currentStep = 0;
-    int accel_step = 0;
+    int currentStep_ = 0;
+    int accel_step_ = 0;
 
-    float A = 40.0f;
-    float V = 0.0f;
-    float Vmin = START_SPEED;
-    float Vmax = CONFIG1_SPEED;
-    int criticalNofSteps = TOTAL_DISTANCE_N_OF_STEPS;
+    float A_ = 40.0f;
+    float V_ = 0.0f;
+    float kVmin_ = START_SPEED;
+    float kVmax_ = CONFIG1_SPEED;
+    int kCriticalNofSteps_ = TOTAL_DISTANCE_N_OF_STEPS;
+    int kReachSteps_ = EXPO_REACH_DISTANCE_N_OF_STEPS;
+    int kExpoDistanceSteps_ = EXPO_DISTANCE_N_OF_STEPS;
+    float kServiceSpeed_ = (float)LOAD_UNLOAD_SPEED;
 
-    bool directionInverted = false;
-    Direction currentDirection = Direction::FORWARD;
-    Mode mode = Mode::IDLE;
-    MOTOR_EVENT event = EVENT_STOP;
-    bool motorMoving = false;
-    bool accelerationMode = false;
-    bool noReturn = false;
-    uint8_t direction_changed = 0;
+    bool directionInverted_ = false;
+    Direction currentDirection_ = Direction::FORWARD;
+    Mode mode_ = Mode::IDLE;
+    MOTOR_EVENT event_ = EVENT_STOP;
+    bool motorMoving_ = false;
+    bool accelerationMode_ = false;
+    bool noReturn_ = false;
+    uint8_t direction_changed_ = 0;
 
-    inline void startMotor(){
-        if(!motorMoving){
-            accel_step = 0;
-            currentStep = 0;
-            mode = Mode::ACCEL;
-            direction_changed = 0;
-            motorMoving = true;
-            enable.setValue(LOW);
-            regValueCalc();
-            HAL_TIM_PWM_Start_IT(htim, timChannel);
+    void StartMotor_(){
+        if(!motorMoving_){
+            accel_step_ = 0;
+            currentStep_ = 0;
+            mode_ = Mode::ACCEL;
+            direction_changed_ = 0;
+            motorMoving_ = true;
+            enable_.setValue(LOW);
+            RegValueCalc_();
+            HAL_TIM_PWM_Start_IT(htim_, timChannel_);
         }
     }
-    inline void regValueCalc(){
-        if(V > 0){
-            uint32_t buf = timerDividend / uint32_t(V);
+    void RegValueCalc_(){
+        if(V_ > 0){
+            uint32_t buf = timerDividend_ / uint32_t(V_);
             if(buf > 0 && buf < UINT16_MAX){
-                __HAL_TIM_SET_AUTORELOAD(htim, buf);
-                __HAL_TIM_SET_COMPARE(htim, timChannel,buf/2);
+                __HAL_TIM_SET_AUTORELOAD(htim_, buf);
+                __HAL_TIM_SET_COMPARE(htim_, timChannel_,buf/2);
             }
         }
     }
 
-    inline void setDirection(Direction newDirection){
-        currentDirection = newDirection;
-        if(directionInverted) direction.setValue(LOGIC_LEVEL((
-                static_cast<bool>(currentDirection) ? Direction::BACKWARDS : Direction::FORWARD)));
-        else direction.setValue(LOGIC_LEVEL(currentDirection));
+    void SetDirection(Direction newDirection){
+        currentDirection_ = newDirection;
+        if(directionInverted_) direction_.setValue(LOGIC_LEVEL((
+                static_cast<bool>(currentDirection_) ? Direction::BACKWARDS : Direction::FORWARD)));
+        else direction_.setValue(LOGIC_LEVEL(currentDirection_));
     }
 
-    inline void reCalcSpeed(){
-        if (mode == Mode::IDLE) return;
-        switch (mode)
+    void StepsCorrectionHack(){
+        currentStep_ -= kReachSteps_;
+    }
+
+    void ReCalcSpeed(){
+        if (mode_ == Mode::IDLE) return;
+        switch (mode_)
         {
             case Mode::ACCEL:
             {
-                if (V >= Vmax)
+                if (V_ >= kVmax_)
                 {
-                    V = Vmax;
-                    event = EVENT_CSS;
-                    mode = Mode::CONST;
+                    V_ = kVmax_;
+                    event_ = EVENT_CSS;
+                    mode_ = Mode::CONST;
                 }else
-                    V += A;
+                    V_ += A_;
 
-                if (accel_step >= EXPO_DISTANCE_N_OF_STEPS / 2)
+                if (accel_step_ >= kExpoDistanceSteps_ / 2)
                 {
-                    mode = Mode::DECCEL;
+                    mode_ = Mode::DECCEL;
                     break;
                 }
-                accel_step++;
+                accel_step_++;
             }
             break;
 
             case Mode::CONST:
             {
-                if (currentStep + accel_step >= EXPO_DISTANCE_N_OF_STEPS) {
-                    mode = Mode::DECCEL;
+                if (currentStep_ + accel_step_ >= kExpoDistanceSteps_) {
+                    mode_ = Mode::DECCEL;
                 }
             }
             break;
 
             case Mode::DECCEL:
             {
-                if (accel_step <= 0)
+                if (accel_step_ <= 0)
                 {
-                    stopMotor();
-                    mode = Mode::IDLE;
-                    event = EVENT_STOP;
+                    StopMotor();
+                    mode_ = Mode::IDLE;
+                    event_ = EVENT_STOP;
                     break;
                 }else{
-                    V -= A;
-                    if (V < Vmin) V = Vmin;
-                    accel_step--;
+                    V_ -= A_;
+                    if (V_ < kVmin_) V_ = kVmin_;
+                    accel_step_--;
                 }
             }
             break;
@@ -246,8 +259,8 @@ private:
                 break;
         }
 
-        if (mode == Mode::ACCEL || mode == Mode::CONST || mode == Mode::DECCEL)
-            currentStep++;
+        if (mode_ == Mode::ACCEL || mode_ == Mode::CONST || mode_ == Mode::DECCEL)
+            currentStep_++;
     }
 };
 

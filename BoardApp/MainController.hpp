@@ -22,111 +22,167 @@ public:
         :motor_controller_(incomeMotorController)
     {}
 
-    static MainController& getRef(){
+    static MainController& GetRef(){
         static auto self = MainController(MotorController::getRef());
         return self;
     }
 
     void BoardInit(){
         input_pin_container_[EXP_REQ].setInverted();
-        input_pin_container_[GRID_HOME_DETECT].setInverted();
-        input_pin_container_[GRID_INFIELD_DETECT].setInverted();
-
-        currentStatus = DEVICE_MOVING;
-        motor_controller_.get_position(Dir::FORWARD);
-        HAL_Delay(300);
+        RasterMoveHome();
    }
 
     void BtnEventHandle(BTN_TYPE btnT, LOGIC_LEVEL value){
         switch (btnT) {
             case GRID_BUTTON:
-                if(currentStatus == DEVICE_GRID_IN_FIELD) RasterUnloadProcedure();
-                else if(currentStatus == DEVICE_GRID_HOME) RasterLoadProcedure();
+                if(value && currentStatus_ == DEVICE_GRID_IN_FIELD)
+                    RasterMoveHome();
+                else if(value && currentStatus_ == DEVICE_GRID_HOME)
+                    RasterMoveInField();
                 break;
             default:
                 break;
         }
     }
 
-    void BoardUpdate(){
-        for(auto &pin: input_pin_container_) pin.refresh();
-        
-        if(*grid_center_){
-            if(currentStatus == DEVICE_RETURN_TO_INITIAL_STATE){
-                motor_controller_.stopMotor();
-                currentStatus = DEVICE_STANDBY;
+    void ErrorChecks(){
+        if(motor_controller_.GetMode() == MotorStatus::in_ERROR)
+            currentError_ = LIMIT_SWITCH_ERROR;
+        if(currentError_ != NO_ERROR)
+            ErrorHandler_(currentError_);
+    }
+
+    bool SwitchesCheck(){
+        if(*grid_home_){
+            switch (currentStatus_) {
+                case DEVICE_SERVICE_MOVING:
+                    motor_controller_.StopMotor();
+                    currentStatus_ = DEVICE_GRID_HOME;
+                    output_pin_container_[INDICATION_0].setValue(LOW);
+                    break;
+                case DEVICE_SHAKE_SCANNING:
+                    motor_controller_.EndSideStepsCorr();
+                    break;
+                case DEVICE_GRID_IN_FIELD:
+                case DEVICE_GRID_HOME:
+                case DEVICE_SCANNING:
+                case DEVICE_ERROR:
+                    break;
             }
-            else if(currentStatus == DEVICE_INITIAL_MOVEMENT || currentStatus == DEVICE_GRID_SUPPLY){
-                if(!motor_controller_.noReturnMode()) motor_controller_.stopMotor();
-                RasterCheck();
-                currentStatus = DEVICE_STANDBY;
-            }
+            return false;
         }
-        
-        else if(*bucky_call_ || exposition_ON_) ExpositionProcedure();
+        if(*grid_in_filed_){
+            output_pin_container_[INDICATION_0].setValue(HIGH);
+            switch (currentStatus_) {
+                case DEVICE_SERVICE_MOVING:
+                    motor_controller_.StopMotor();
+                    currentStatus_ = DEVICE_GRID_IN_FIELD;
+                    break;
+                case DEVICE_GRID_IN_FIELD:
+                case DEVICE_GRID_HOME:
+                case DEVICE_SCANNING:
+                case DEVICE_SHAKE_SCANNING:
+                case DEVICE_ERROR:
+                    break;
+            }
+            return false;
+        }else{
+            output_pin_container_[INDICATION_0].setValue(LOW);
+        }
 
-        if(motor_controller_.getMode() == MotorStatus::in_ERROR) currentError = LIMIT_SWITCH_ERROR;
-
-        if(currentError != NO_ERROR) errorHandler(currentError);
+        return true;
     }
 
-    void RasterLoadProcedure(){
-        motor_controller_.get_position(Dir::BACKWARDS);
+    void BoardUpdate(){
+        for(auto &pin: input_pin_container_)
+            pin.refresh();
+        ErrorChecks();
+        if(SwitchesCheck())
+            ExpositionProcedure();
     }
 
-    void RasterUnloadProcedure(){
-        currentStatus = DEVICE_MOVING;
+    void RasterMoveInField(){
+        if(*grid_in_filed_){
+            currentStatus_ = DEVICE_GRID_IN_FIELD;
+            return;
+        }
+        currentStatus_ = DEVICE_SERVICE_MOVING;
         motor_controller_.get_position(Dir::FORWARD, true);
-        output_pin_container_[INDICATION_0].setValue(LOW);
+        TimMSDelay(500);
+    }
+
+    void RasterMoveHome(){
+        if(*grid_home_){
+            currentStatus_ = DEVICE_GRID_HOME;
+            return;
+        }
+        currentStatus_ = DEVICE_SERVICE_MOVING;
+        motor_controller_.get_position(Dir::BACKWARDS, true);
+        TimMSDelay(500);
     }
 
     void ReturnHome(){
-        if(currentStatus != DEVICE_GRID_HOME){
-            motor_controller_.stopMotor();
-            currentStatus = DEVICE_MOVING;
+        if(currentStatus_ != DEVICE_GRID_HOME){
+            motor_controller_.StopMotor();
+            currentStatus_ = DEVICE_SERVICE_MOVING;
             motor_controller_.get_position(Dir::BACKWARDS);
         }
     }
 
     void ReturnInField(){
-        if(currentStatus != DEVICE_GRID_IN_FIELD){
-            currentStatus = DEVICE_MOVING;
-            motor_controller_.stopMotor();
+        if(currentStatus_ != DEVICE_GRID_IN_FIELD){
+            currentStatus_ = DEVICE_SERVICE_MOVING;
+            motor_controller_.StopMotor();
             motor_controller_.get_position(Dir::BACKWARDS);
         }
     }
 
+    void ExpReqOnHoneGrid(){
+        currentStatus_ = DEVICE_ERROR;
+        currentError_ = EXP_REQ_ERROR;
+    }
+
+    void SetRasterInMotionSignal(LOGIC_LEVEL level){
+        TimMSDelay(0);
+        output_pin_container_[IN_MOTION].setValue(level);
+    }
+
     inline void ExpositionProcedure(){
         if(!*exp_req_){
-            exposition_ON_ = false;
-            output_pin_container_[IN_MOTION].setValue(LOW);
-            if(no_raster_) currentStatus = DEVICE_STANDBY;
-            else ReturnToCenter();
+            SetRasterInMotionSignal(LOW);
+            switch (lastPosition_) {
+                case DEVICE_GRID_HOME:
+                    RasterMoveHome();
+                    break;
+                case DEVICE_GRID_IN_FIELD:
+                    RasterMoveInField();
+                    break;
+                default:
+                    break;
+            }
             return;
         }
-        switch (currentStatus) {
-            case DEVICE_STANDBY:
-                exposition_ON_ = true;
-                if(*bucky_call_)
-                    currentStatus = *on_tomo_ ? DEVICE_SCANING_TOMO_ON : DEVICE_SCANING_TOMO_OFF;
-                if(!no_raster_)
-                    motor_controller_.exposition();
+        switch (currentStatus_) {
+            case DEVICE_GRID_IN_FIELD:
+                lastPosition_ = currentStatus_;
+                currentStatus_ = kShakingScan_ ? DEVICE_SHAKE_SCANNING : DEVICE_SCANNING;
+                if(!kShakingScan_)
+                    SetRasterInMotionSignal(HIGH);
+                else
+                    motor_controller_.Exposition();
                 break;
-            case DEVICE_SCANING_TOMO_OFF:
-                if(!no_raster_)
-                    output_pin_container_[BUCKY_READY].setValue(HIGH);
-                else if(motor_controller_.getEvent() == EVENT_CSS)
-                    output_pin_container_[BUCKY_READY].setValue(HIGH);
+            case DEVICE_GRID_HOME:
+                if(!kRasterHomeOk_){
+                    ExpReqOnHoneGrid();
+                    return;
+                }
+                lastPosition_ = currentStatus_;
+                SetRasterInMotionSignal(HIGH);
+                currentStatus_ = DEVICE_SCANNING;
                 break;
-            case DEVICE_SCANING_TOMO_ON:
-                if(!*on_tomo_ && !tomo_signal_){
-                    tomo_signal_ = true;
-                    output_pin_container_[BUCKY_READY].setValue(HIGH);
-                }
-                else if(*on_tomo_ && tomo_signal_){
-                    tomo_signal_ = false;
-                    output_pin_container_[BUCKY_READY].setValue(LOW);
-                }
+            case DEVICE_SHAKE_SCANNING:
+                if(motor_controller_.GetEvent() == EVENT_CSS)
+                    SetRasterInMotionSignal(HIGH);
                 break;
             default:
                 break;
@@ -148,28 +204,31 @@ private:
     };
 
     const LOGIC_LEVEL* exp_req_ = &input_pin_container_[EXP_REQ].currentState;
-    const LOGIC_LEVEL* grip_home_ = &input_pin_container_[GRID_HOME_DETECT].currentState;
+    const LOGIC_LEVEL* grid_home_ = &input_pin_container_[GRID_HOME_DETECT].currentState;
     const LOGIC_LEVEL* grid_in_filed_ = &input_pin_container_[GRID_INFIELD_DETECT].currentState;
 
     const Button btn_grid = Button(GRID_BUTTON);
 
     MotorController& motor_controller_;
 
-    BOARD_STATUS_ERROR currentError = NO_ERROR;
-    volatile BOARD_STATUS currentStatus = DEVICE_MOVING;
+    BOARD_STATUS_ERROR currentError_ = NO_ERROR;
+    volatile BOARD_STATUS currentStatus_ = DEVICE_SERVICE_MOVING;
+    BOARD_STATUS lastPosition_ = DEVICE_SERVICE_MOVING;
     bool exposition_ON_ = false;
     bool tomo_signal_ = false;
+    const bool kShakingScan_ = false;
+    const bool kRasterHomeOk_ = true;
 
-    [[noreturn]] void errorHandler(BOARD_STATUS_ERROR error){
-        motor_controller_.stopMotor();
-        currentStatus = DEVICE_ERROR;
+    void ErrorHandler_(BOARD_STATUS_ERROR error){
+        motor_controller_.StopMotor();
+        output_pin_container_[INDICATION_1].setValue(HIGH);
         switch (error) {
             case STANDBY_MOVEMENT_ERROR:
                 break;
             case LIMIT_SWITCH_ERROR:
                 break;
-            case ON_TOMO_EXP_REQ_ERROR:
-                break;
+            case EXP_REQ_ERROR:
+                return;
             default:
                 break;
         }
