@@ -10,7 +10,10 @@ extern "C"
     {
         if(htim->Instance == TIM1){
             HAL_IWDG_Refresh(&hiwdg);
-            MainController::GetRef().BoardUpdate();
+        }
+        if(htim->Instance == TIM6){
+            MainController::GetRef().UnFreezeSwitches();
+            HAL_TIM_Base_Stop_IT(htim);
         }
         if(htim->Instance == TIM7){
             MainController::GetRef().BtnEventHandle(GRID_BUTTON, HIGH);
@@ -20,7 +23,8 @@ extern "C"
     void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM4){
-            MotorController::getRef().motor_refresh();
+//            MotorController::getRef().motor_refresh();
+            MotorController::getRef().MotorMakeStep();
         }
     }
 
@@ -32,11 +36,12 @@ extern "C"
             case GRID_BUTTON_Pin:
     //            if(btn_grid_pressed){
     //                if((HAL_GetTick() - time_gridBTN_pressed) > TIME_GRID_BTN_LONG_PRESS)
-    //                    mainController.BtnEventHandle(btn_grid, HIGH);
+    //                    mainController.BtnEventHandle(btn_grid_, HIGH);
     //            }else time_gridBTN_pressed = HAL_GetTick();
     //            btn_grid_pressed = !btn_grid_pressed;
-                MainController::GetRef().BtnEventHandle(GRID_BUTTON, (LOGIC_LEVEL)btn_grid_pressed);
-                btn_grid_pressed = !btn_grid_pressed;
+                MainController::GetRef().BtnEventHandle(GRID_BUTTON,
+                                                        static_cast<LOGIC_LEVEL>(HAL_GPIO_ReadPin(GRID_BUTTON_GPIO_Port,
+                                                                                                  GRID_BUTTON_Pin)));
 //                if(btn_grid_pressed) HAL_TIM_Base_Start_IT(&htim7);
 //                else HAL_TIM_Base_Stop_IT(&htim7);
                 break;
@@ -82,12 +87,13 @@ extern "C"
     void appInit(){
         EXTI_clear_enable();
         MotorController::getRef().load_driver(DIPSwitches_configureDriver());
-        HAL_TIM_Base_Start(&htim6);
         HAL_TIM_Base_Start_IT(&htim1);
         MainController::GetRef().BoardInit();
     }
 
     void while_in_main_App()
     {
+        MainController::GetRef().BoardUpdate();
+        MotorController::getRef().MotorUpdate();
     }
 }

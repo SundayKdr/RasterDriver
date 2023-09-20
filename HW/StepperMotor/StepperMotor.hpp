@@ -33,7 +33,7 @@ public:
     };
     using MOTOR_IOS = PIN<MOTOR_PIN, PinWriteable>;
 
-    enum class Mode
+    enum Mode
     {
         IDLE,
         ACCEL,
@@ -65,7 +65,7 @@ public:
     }
 
     void motor_refresh(){
-        if(mode_ == Mode::in_ERROR) return;
+        if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
         if(accelerationMode_){
             ReCalcSpeed();
             if(currentStep_ >= kExpoDistanceSteps_)
@@ -85,7 +85,43 @@ public:
         }
     }
 
+    void MotorMakeStep(){
+        if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
+        if(accelerationMode_){
+            ReCalcSpeed();
+            RegValueCalc_();
+        }
+        else
+            currentStep_++;
+    }
+
+    void MotorUpdate(){
+        if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
+        if(accelerationMode_){
+            if(currentStep_ >= kExpoDistanceSteps_)
+                ChangeDirection();
+            if(mode_ == DECCEL && accel_step_ <= 0)
+            {
+                StopMotor();
+                mode_ = Mode::IDLE;
+                event_ = EVENT_STOP;
+            }
+        }
+        else{
+            if(currentStep_ >= kCriticalNofSteps_){
+                if(noReturn_) StopMotor();
+                else ChangeDirection();
+            }
+        }
+        if(direction_changed_ > 1){
+            StopMotor();
+            mode_ = Mode::in_ERROR;
+        }
+    }
+
     void get_position(Direction dir, bool noRet = false){
+        if(motorMoving_)
+            StopMotor();
         accelerationMode_ = false;
         V_ = kServiceSpeed_;
         SetDirection(dir);
@@ -96,9 +132,8 @@ public:
     void Exposition(){
         accelerationMode_ = true;
         V_ = kVmin_;
-        SetDirection(Direction::FORWARD);
+        SetDirection(Direction::BACKWARDS);
         StartMotor_();
-        StepsCorrectionHack();
     }
 
     void EndSideStepsCorr(){
@@ -123,6 +158,10 @@ public:
         currentStep_ = 0;
         accel_step_ = 0;
         mode_ = Mode::ACCEL;
+    }
+
+    void StepsCorrectionHack(){
+        currentStep_ -= kReachSteps_;
     }
 
     [[nodiscard]] bool IsMotorMoving() const {
@@ -204,10 +243,6 @@ private:
         else direction_.setValue(LOGIC_LEVEL(currentDirection_));
     }
 
-    void StepsCorrectionHack(){
-        currentStep_ -= kReachSteps_;
-    }
-
     void ReCalcSpeed(){
         if (mode_ == Mode::IDLE) return;
         switch (mode_)
@@ -229,7 +264,7 @@ private:
                 }
                 accel_step_++;
             }
-            break;
+                break;
 
             case Mode::CONST:
             {
@@ -237,23 +272,15 @@ private:
                     mode_ = Mode::DECCEL;
                 }
             }
-            break;
+                break;
 
             case Mode::DECCEL:
             {
-                if (accel_step_ <= 0)
-                {
-                    StopMotor();
-                    mode_ = Mode::IDLE;
-                    event_ = EVENT_STOP;
-                    break;
-                }else{
-                    V_ -= A_;
-                    if (V_ < kVmin_) V_ = kVmin_;
-                    accel_step_--;
-                }
+                V_ -= A_;
+                if (V_ < kVmin_) V_ = kVmin_;
+                accel_step_--;
             }
-            break;
+                break;
 
             default:
                 break;
@@ -262,6 +289,7 @@ private:
         if (mode_ == Mode::ACCEL || mode_ == Mode::CONST || mode_ == Mode::DECCEL)
             currentStep_++;
     }
+
 };
 
 #endif //TOMO_A4BOARD_STEPPERMOTOR_HPP

@@ -4,8 +4,8 @@
 
 #define TIME_GRID_BTN_LONG_PRESS        1000
 #define TOTAL_DISTANCE_N_OF_STEPS       12000
-#define EXPO_DISTANCE_N_OF_STEPS        1800
-#define EXPO_REACH_DISTANCE_N_OF_STEPS  100
+#define EXPO_DISTANCE_N_OF_STEPS        3000
+#define EXPO_REACH_DISTANCE_N_OF_STEPS  500
 #define LOAD_UNLOAD_SPEED               1985
 #define START_SPEED                     1569
 
@@ -18,12 +18,18 @@
 #define CONFIG3_ACCELERATION            43
 #define CONFIG4_ACCELERATION            52
 
-static void TimMSDelay(uint32_t msDelay){
-    __disable_irq ();
-    TIM6->CNT = 0;
-    uint32_t cnt = TIM6->CNT;
-    while(TIM6->CNT < msDelay){}
-    __enable_irq ();
+//static void FreezeDeviceDelay(uint32_t delay){
+//    uint16_t msDelay = delay * 10 > UINT16_MAX ? UINT16_MAX : delay * 10;
+//    __disable_irq ();
+//    TIM6->CNT = 0;
+//    while(TIM6->CNT < msDelay){}
+//    __enable_irq ();
+//}
+
+static void StartFreezeTimIT(uint32_t delay){
+    uint16_t msDelay = delay * 10 > UINT16_MAX ? UINT16_MAX : delay * 10;
+    __HAL_TIM_SET_AUTORELOAD(&htim6, msDelay);
+    HAL_TIM_Base_Start_IT(&htim6);
 }
 
 namespace RB::types{
@@ -48,6 +54,7 @@ namespace RB::types{
     };
 
     enum BOARD_STATUS{
+        DEVICE_INIT_STATE,
         DEVICE_SERVICE_MOVING,
         DEVICE_GRID_IN_FIELD,
         DEVICE_GRID_HOME,
