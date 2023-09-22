@@ -1,13 +1,11 @@
-//
-// Created by 79162 on 25.09.2021.
-//
 
-#ifndef TOMO_A4BOARD_IOS_HPP
-#define TOMO_A4BOARD_IOS_HPP
+#ifndef SND_STM32_PIN_HPP
+#define SND_STM32_PIN_HPP
 
 #include <cstdint>
 #include "type_traits"
 
+namespace pin_impl{
 enum LOGIC_LEVEL{
     LOW = 0,
     HIGH = 1,
@@ -21,67 +19,81 @@ struct PinWriteable
 {
 };
 
-template<typename PinName, typename InterfaceType>
+template<typename InterfaceType>
 class PIN{
 public:
-    LOGIC_LEVEL currentState = LOW;
-    const PinName pinName;
-
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinReadable, T>::value)
-    inline LOGIC_LEVEL getValue(){
+    constexpr inline LOGIC_LEVEL getValue(){
         LOGIC_LEVEL retVal;
-        if ((port->IDR & pin) != (uint32_t)LOGIC_LEVEL::LOW) retVal = LOGIC_LEVEL::HIGH;
-        else retVal = LOGIC_LEVEL::LOW;
-        if(inverted) return (retVal ? LOGIC_LEVEL::LOW : LOGIC_LEVEL::HIGH);
-        else return retVal;
+        if((port_->IDR & pin_) != (uint32_t)LOGIC_LEVEL::LOW)
+            retVal = LOGIC_LEVEL::HIGH;
+        else
+            retVal = LOGIC_LEVEL::LOW;
+        if(inverted_)
+            return (retVal ? LOGIC_LEVEL::LOW : LOGIC_LEVEL::HIGH);
+        else
+            return retVal;
     }
 
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinReadable, T>::value)
-    inline LOGIC_LEVEL refresh(){
-        currentState = getValue();
-        return currentState;
+    constexpr inline LOGIC_LEVEL refresh(){
+        currentState_ = getValue();
+        return currentState_;
     }
 
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinWriteable, T>::value)
-    inline void setValue(LOGIC_LEVEL value){
-        if(inverted){
-            if (value) port->BRR = (uint32_t)pin;
-            else port->BSRR = (uint32_t)pin;
+    constexpr inline void setValue(LOGIC_LEVEL value){
+        if(inverted_){
+            if (value) port_->BRR = (uint32_t)pin_;
+            else port_->BSRR = (uint32_t)pin_;
         }else{
-            if (value) port->BSRR = (uint32_t)pin;
-            else port->BRR = (uint32_t)pin;
+            if (value) port_->BSRR = (uint32_t)pin_;
+            else port_->BRR = (uint32_t)pin_;
         }
-        currentState = value;
+        currentState_ = value;
     }
 
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinWriteable, T>::value)
-    inline void togglePinState(){
-        uint32_t odr = port->ODR;
-        port->BSRR = ((odr & pin) << 16U) | (~odr & pin);
+    constexpr inline void togglePinState(){
+        uint32_t odr = port_->ODR;
+        port_->BSRR = ((odr & pin_) << 16U) | (~odr & pin_);
     }
 
-//    PIN() = delete;
+    PIN() = delete;
+    PIN(PIN&) = delete;
     const PIN& operator=(const PIN &) = delete;
     PIN& operator=(PIN &) = delete;
 
-    void setInverted() {
-        inverted = true;
+    constexpr explicit PIN(uint16_t incomeName, GPIO_TypeDef* incomePortPtr, uint16_t incomePin)
+            : pinType_(incomeName),
+              port_(incomePortPtr),
+              pin_(incomePin)
+    {};
+
+    constexpr void setInverted() {
+        inverted_ = true;
     }
 
-    constexpr explicit PIN(PinName incomeName, GPIO_TypeDef* incomePortPtr, uint16_t incomePin):
-            pinName(incomeName),
-            port(incomePortPtr),
-            pin(incomePin)
-    {};
+    [[nodiscard]] constexpr inline uint16_t getPin() const{
+        return pin_;
+    }
+
+    [[nodiscard]] LOGIC_LEVEL* GetPinStatePtr(){
+        return static_cast<LOGIC_LEVEL*>(&currentState_);
+    }
+
 protected:
 private:
-    GPIO_TypeDef* port;
-    uint16_t pin;
-    bool inverted = false;
-};
+    LOGIC_LEVEL currentState_ = LOW;
+    const uint16_t pinType_;
 
-#endif //TOMO_A4BOARD_IOS_HPP
+    GPIO_TypeDef* port_;
+    uint16_t pin_;
+    bool inverted_ = false;
+};
+} // namespace pin_impl
+#endif //SND_STM32_PIN_HPP

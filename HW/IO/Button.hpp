@@ -5,15 +5,34 @@
 #ifndef TOMO_A4BOARD_BUTTON_HPP
 #define TOMO_A4BOARD_BUTTON_HPP
 
-#include "Global.hpp"
+#include "PIN.hpp"
+
+using namespace pin_impl;
 
 struct Button{
-    constexpr explicit Button(BTN_TYPE incomeType) noexcept
-        : type(incomeType)
-    {}
-    const BTN_TYPE type;
-    [[nodiscard]] inline constexpr BTN_TYPE getType() const noexcept
-    {return type;}
+    constexpr explicit Button(uint16_t incomeType, GPIO_TypeDef* port, uint16_t pin) noexcept
+        : type_(incomeType),
+        pin_(incomeType, port, pin)
+    {
+        pin_.setInverted();
+    }
+
+    const uint16_t type_;
+    PIN<PinReadable> pin_;
+
+    [[nodiscard]] inline constexpr uint16_t getType() const noexcept
+    {
+        return type_;
+    }
+    uint16_t operator()() const{
+        return pin_.getPin();
+    }
+    bool operator==(uint16_t otherPin) const{
+        return pin_.getPin() == otherPin;
+    }
+    LOGIC_LEVEL getState(){
+        return pin_.getValue();
+    }
 };
 
 #endif //TOMO_A4BOARD_BUTTON_HPP

@@ -7,19 +7,29 @@
 
 #include <cstdlib>
 #include "IO/PIN.hpp"
-#include "Global.hpp"
 
-using namespace RB::types;
+using namespace pin_impl;
+
+namespace StepperMotor{
 
 struct StepperCfg
 {
-    float A = CONFIG1_ACCELERATION;
-    float Vmin = START_SPEED;
-    float Vmax = CONFIG1_SPEED;
-    const int criticalNofSteps = TOTAL_DISTANCE_N_OF_STEPS;
-    bool directionInverted = false;
-    TIM_HandleTypeDef *htim = &htim4;
-    uint32_t timChannel = TIM_CHANNEL_2;
+    float A;
+    float Vmin;
+    float Vmax;
+    int criticalNofSteps;
+    int reach_steps;
+    int expo_distance_steps;
+    bool directionInverted;
+    TIM_HandleTypeDef* htim;
+    uint32_t timChannel {0x00000000U};
+};
+
+enum MOTOR_EVENT {
+    EVENT_NULL = 0,
+    EVENT_STOP,
+    EVENT_CSS,  //	constant speed reached
+    EVENT_CSE   //  constant speed end
 };
 
 class MotorController{
@@ -31,7 +41,8 @@ public:
         ENABLE_PIN,
         RESET_PIN,
     };
-    using MOTOR_IOS = PIN<MOTOR_PIN, PinWriteable>;
+
+    using MOTOR_IOS = PIN<PinWriteable>;
 
     enum Mode
     {
@@ -46,29 +57,50 @@ public:
         FORWARD = 1
     };
 
-    MotorController() = default;
+    const MotorController& operator=(const MotorController &) = delete;
+    MotorController& operator=(MotorController &) = delete;
+    MotorController(MotorController&) = delete;
+    MotorController(MotorController&&)= delete;
 
-    static MotorController& getRef(){
+    static MotorController& GetRef(){
         static MotorController motorController;
         return motorController;
     }
 
+    static void LoadDriver(StepperCfg &&cfg){
+        auto&& ref = GetRef();
+        ref.A_ = cfg.A;
+        ref.Vmin_ = cfg.Vmin;
+        ref.Vmax_ = cfg.Vmax;
+        ref.service_speed_ = cfg.Vmin;
+        ref.expo_distance_steps_ = cfg.expo_distance_steps;
+        ref.kCriticalNofSteps_ = cfg.criticalNofSteps;
+        ref.reach_steps_ = cfg.reach_steps;
+        ref.htim_ = cfg.htim;
+        ref.timChannel_ = cfg.timChannel;
+        ref.directionInverted_ = cfg.directionInverted;
+        ref.timerDividend_ = SystemCoreClock/(ref.htim_->Instance->PSC);
+    }
+
     void load_driver(StepperCfg &&cfg){
         A_ = cfg.A;
-        kVmin_ = cfg.Vmin;
-        kVmax_ = cfg.Vmax;
+        Vmin_ = cfg.Vmin;
+        Vmax_ = cfg.Vmax;
+        service_speed_ = cfg.Vmin;
+        expo_distance_steps_ = cfg.expo_distance_steps;
         kCriticalNofSteps_ = cfg.criticalNofSteps;
+        reach_steps_ = cfg.reach_steps;
         htim_ = cfg.htim;
         timChannel_ = cfg.timChannel;
         directionInverted_ = cfg.directionInverted;
-        timerDividend_ = SystemCoreClock/(htim_->Instance->PSC);
+        timerDividend_ = htim_ ? SystemCoreClock/(htim_->Instance->PSC) : 1;
     }
 
     void motor_refresh(){
         if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
         if(accelerationMode_){
             ReCalcSpeed();
-            if(currentStep_ >= kExpoDistanceSteps_)
+            if(currentStep_ >= expo_distance_steps_)
                 ChangeDirection();
             RegValueCalc_();
         }
@@ -98,7 +130,7 @@ public:
     void MotorUpdate(){
         if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
         if(accelerationMode_){
-            if(currentStep_ >= kExpoDistanceSteps_)
+            if(currentStep_ >= expo_distance_steps_)
                 ChangeDirection();
             if(mode_ == DECCEL && accel_step_ <= 0)
             {
@@ -123,7 +155,7 @@ public:
         if(motorMoving_)
             StopMotor();
         accelerationMode_ = false;
-        V_ = kServiceSpeed_;
+        V_ = service_speed_;
         SetDirection(dir);
         if(noRet) noReturn_ = true;
         StartMotor_();
@@ -131,13 +163,13 @@ public:
 
     void Exposition(){
         accelerationMode_ = true;
-        V_ = kVmin_;
+        V_ = Vmin_;
         SetDirection(Direction::BACKWARDS);
         StartMotor_();
     }
 
     void EndSideStepsCorr(){
-        kCriticalNofSteps_ -= kReachSteps_;
+        kCriticalNofSteps_ -= reach_steps_;
         ChangeDirection();
     }
 
@@ -153,7 +185,8 @@ public:
     }
 
     void ChangeDirection(){
-        if(!accelerationMode_) direction_changed_ += 1;
+        if(!accelerationMode_)
+            direction_changed_ += 1;
         SetDirection(static_cast<bool>(currentDirection_) ? Direction::BACKWARDS : Direction::FORWARD);
         currentStep_ = 0;
         accel_step_ = 0;
@@ -161,7 +194,7 @@ public:
     }
 
     void StepsCorrectionHack(){
-        currentStep_ -= kReachSteps_;
+        currentStep_ -= reach_steps_;
     }
 
     [[nodiscard]] bool IsMotorMoving() const {
@@ -185,6 +218,8 @@ public:
     }
 
 private:
+    MotorController() = default;
+
     MOTOR_IOS step_ = MOTOR_IOS(STEP_PIN, STEP_GPIO_Port, STEP_Pin);
     MOTOR_IOS direction_ = MOTOR_IOS(DIR_PIN, DIR_GPIO_Port, DIR_Pin);
     MOTOR_IOS enable_ = MOTOR_IOS(ENABLE_PIN, ENABLE_GPIO_Port, ENABLE_Pin);
@@ -198,12 +233,12 @@ private:
 
     float A_ = 40.0f;
     float V_ = 0.0f;
-    float kVmin_ = START_SPEED;
-    float kVmax_ = CONFIG1_SPEED;
-    int kCriticalNofSteps_ = TOTAL_DISTANCE_N_OF_STEPS;
-    int kReachSteps_ = EXPO_REACH_DISTANCE_N_OF_STEPS;
-    int kExpoDistanceSteps_ = EXPO_DISTANCE_N_OF_STEPS;
-    float kServiceSpeed_ = (float)LOAD_UNLOAD_SPEED;
+    float Vmin_ = 0.0f;
+    float Vmax_ = 40.0f;
+    int kCriticalNofSteps_ = 0;
+    int reach_steps_ = 0;
+    int expo_distance_steps_ = 0;
+    float service_speed_ = (float)0;
 
     bool directionInverted_ = false;
     Direction currentDirection_ = Direction::FORWARD;
@@ -238,8 +273,8 @@ private:
 
     void SetDirection(Direction newDirection){
         currentDirection_ = newDirection;
-        if(directionInverted_) direction_.setValue(LOGIC_LEVEL((
-                static_cast<bool>(currentDirection_) ? Direction::BACKWARDS : Direction::FORWARD)));
+        if(directionInverted_) direction_.setValue(
+                static_cast<bool>(currentDirection_) ? LOGIC_LEVEL(Direction::BACKWARDS) : LOGIC_LEVEL(Direction::FORWARD));
         else direction_.setValue(LOGIC_LEVEL(currentDirection_));
     }
 
@@ -249,15 +284,15 @@ private:
         {
             case Mode::ACCEL:
             {
-                if (V_ >= kVmax_)
+                if (V_ >= Vmax_)
                 {
-                    V_ = kVmax_;
+                    V_ = Vmax_;
                     event_ = EVENT_CSS;
                     mode_ = Mode::CONST;
                 }else
                     V_ += A_;
 
-                if (accel_step_ >= kExpoDistanceSteps_ / 2)
+                if (accel_step_ >= expo_distance_steps_ / 2)
                 {
                     mode_ = Mode::DECCEL;
                     break;
@@ -268,7 +303,7 @@ private:
 
             case Mode::CONST:
             {
-                if (currentStep_ + accel_step_ >= kExpoDistanceSteps_) {
+                if (currentStep_ + accel_step_ >= expo_distance_steps_) {
                     mode_ = Mode::DECCEL;
                 }
             }
@@ -276,9 +311,17 @@ private:
 
             case Mode::DECCEL:
             {
-                V_ -= A_;
-                if (V_ < kVmin_) V_ = kVmin_;
-                accel_step_--;
+                if (accel_step_ > 0)
+                {
+                    V_ -= A_;
+                    if (V_ < Vmin_) V_ = Vmin_;
+                    accel_step_--;
+                }else{
+                    StopMotor();
+                    mode_ = Mode::IDLE;
+                    event_ = EVENT_STOP;
+                    break;
+                }
             }
                 break;
 
@@ -291,5 +334,5 @@ private:
     }
 
 };
-
+} //namespace StepperMotor
 #endif //TOMO_A4BOARD_STEPPERMOTOR_HPP

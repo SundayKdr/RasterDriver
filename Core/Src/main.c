@@ -52,8 +52,8 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-extern void while_in_main_App();
-extern void appInit();
+extern void AppLoop();
+extern void AppInit();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -96,14 +96,14 @@ int main(void)
   MX_TIM6_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-    appInit();
+    AppInit();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-      while_in_main_App();
+      AppLoop();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

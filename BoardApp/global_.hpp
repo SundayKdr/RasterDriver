@@ -1,6 +1,6 @@
 
-#ifndef RASTERDRIVER_GLOBAL_HPP
-#define RASTERDRIVER_GLOBAL_HPP
+#ifndef RASTERDRIVER_GLOBAL__HPP
+#define RASTERDRIVER_GLOBAL__HPP
 
 #define TIME_GRID_BTN_LONG_PRESS        1000
 #define TOTAL_DISTANCE_N_OF_STEPS       12000
@@ -25,6 +25,38 @@
 //    while(TIM6->CNT < msDelay){}
 //    __enable_irq ();
 //}
+
+StepperMotor::StepperCfg DIPSwitches_configureDriver(){
+    StepperMotor::StepperCfg cfg{};
+    cfg.Vmin = LOAD_UNLOAD_SPEED;
+    cfg.htim = &htim4;
+    cfg.timChannel = TIM_CHANNEL_2;
+    cfg.reach_steps = EXPO_REACH_DISTANCE_N_OF_STEPS;
+    cfg.criticalNofSteps = TOTAL_DISTANCE_N_OF_STEPS;
+    cfg.expo_distance_steps = EXPO_DISTANCE_N_OF_STEPS;
+    if(HAL_GPIO_ReadPin(CONFIG_1_GPIO_Port, CONFIG_1_Pin)){
+        if(HAL_GPIO_ReadPin(CONFIG_2_GPIO_Port, CONFIG_2_Pin)){
+            cfg.Vmax = CONFIG1_SPEED;
+            cfg.A = CONFIG1_ACCELERATION;
+        }else{
+            cfg.Vmax = CONFIG2_SPEED;
+            cfg.A = CONFIG2_ACCELERATION;
+        }
+    }else{
+        if(HAL_GPIO_ReadPin(CONFIG_2_GPIO_Port, CONFIG_2_Pin)){
+            cfg.Vmax = CONFIG3_SPEED;
+            cfg.A = CONFIG3_ACCELERATION;
+        }else{
+            cfg.Vmax = CONFIG4_SPEED;
+            cfg.A = CONFIG4_ACCELERATION;
+        }
+    }
+
+    if(!HAL_GPIO_ReadPin(CONFIG_3_GPIO_Port, CONFIG_3_Pin)){
+        cfg.directionInverted = true;
+    }
+    return cfg;
+}
 
 static void StartFreezeTimIT(uint32_t delay){
     uint16_t msDelay = delay * 10 > UINT16_MAX ? UINT16_MAX : delay * 10;
@@ -66,13 +98,6 @@ namespace RB::types{
     enum BTN_TYPE{
         GRID_BUTTON,
     };
-
-    enum MOTOR_EVENT {
-        EVENT_NULL = 0,
-        EVENT_STOP,
-        EVENT_CSS,  //	constant speed reached
-        EVENT_CSE   //  constant speed end
-    };
 }
 
-#endif //RASTERDRIVER_GLOBAL_HPP
+#endif //RASTERDRIVER_GLOBAL__HPP

@@ -1,18 +1,21 @@
 
-#ifndef RASTERDRIVER_MAINCONTROLLER_HPP
-#define RASTERDRIVER_MAINCONTROLLER_HPP
+#ifndef RASTERDRIVER_MAIN_CONTROLLER_HPP
+#define RASTERDRIVER_MAIN_CONTROLLER_HPP
 
 #include <array>
 #include "StepperMotor/StepperMotor.hpp"
 #include "IO/PIN.hpp"
 #include "IO/Button.hpp"
-#include "Global.hpp"
+#include "global_.hpp"
+#include "app_timer.hpp"
 
 using namespace RB::types;
+using namespace StepperMotor;
+using namespace pin_impl;
 
 class MainController {
-    using InputPinType = PIN<RB::types::INPUT_TYPE, PinReadable>;
-    using OutputPinType = PIN<RB::types::OUTPUT_TYPE, PinWriteable>;
+    using InputPinType = PIN<PinReadable>;
+    using OutputPinType = PIN<PinWriteable>;
     using Dir = MotorController::Direction;
     using MotorStatus = MotorController::Mode;
 public:
@@ -23,26 +26,76 @@ public:
     MainController(MainController&&)= delete;
 
     static MainController& GetRef(){
-        static auto self = MainController(MotorController::getRef());
+        static auto self = MainController(MotorController::GetRef());
         return self;
     }
 
     void BoardInit(){
+        MotorController::LoadDriver(DIPSwitches_configureDriver());
         input_pin_container_[EXP_REQ].setInverted();
         RasterMoveHome();
+    }
+
+    bool isInState(BOARD_STATUS status){
+       return currentState_ == status;
    }
+
+    static bool isSignalHigh(const LOGIC_LEVEL* signal){
+        return *signal;
+    }
+
+    void ChangeDeviceState(BOARD_STATUS new_status){
+       currentState_ = new_status;
+    }
+
+    void StopMotor(){
+        motor_controller_.StopMotor();
+    }
+
+    void ChangeMotorDir(){
+        FreezeSwitchCheck();
+        motor_controller_.ChangeDirection();
+    }
+
+    void ChangeMotorDirAbnormal(){
+        FreezeSwitchCheck();
+        motor_controller_.StepsCorrectionHack();
+    }
+
+    void CorrectExpoSteps(){
+        motor_controller_.EndSideStepsCorr();
+    }
+
+    void SetOutputSignal(OUTPUT_TYPE sigType, LOGIC_LEVEL level){
+        if(output_pin_container_.size() < static_cast<int>(sigType))
+            return;
+        output_pin_container_[sigType].setValue(level);
+    }
+
+    void BtnEventHandle(Button& btn){
+        if(btn.getState()){
+            if(isInState(DEVICE_GRID_IN_FIELD))
+                StartShakeExposition();
+            else if((isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_GRID_HOME))){
+                SetRasterInMotionSignal(LOW);
+                RasterMoveInField();
+            }
+        }
+    }
 
     void BtnEventHandle(BTN_TYPE btnT, LOGIC_LEVEL value){
         switch (btnT) {
             case GRID_BUTTON:
-//                if(value && currentStatus_ == DEVICE_GRID_IN_FIELD)
+//                if(value && isInState(DEVICE_GRID_IN_FIELD))
 //                    RasterMoveHome();
-//                else if(value && currentStatus_ == DEVICE_GRID_HOME)
+//                else if(value && isInState(DEVICE_GRID_HOME))
 //                    RasterMoveInField();
-                if(value && (currentStatus_ == DEVICE_GRID_IN_FIELD))
+                if(value && (isInState(DEVICE_GRID_IN_FIELD)))
                     StartShakeExposition();
-                else if(value && (currentStatus_ == DEVICE_SHAKE_SCANNING || currentStatus_ == DEVICE_GRID_HOME))
+                else if(value && (isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_GRID_HOME))){
+                    SetRasterInMotionSignal(LOW);
                     RasterMoveInField();
+                }
                 break;
             default:
                 break;
@@ -57,35 +110,36 @@ public:
     }
 
     void HomeSwitchCheck(){
-        if(*grid_home_sig_){
-            switch (currentStatus_) {
+        if(isSignalHigh(grid_home_sig_)){
+            switch (currentState_) {
                 case DEVICE_SERVICE_MOVING:
-                    motor_controller_.StopMotor();
-                    currentStatus_ = DEVICE_GRID_HOME;
+                    StopMotor();
+                    ChangeDeviceState(DEVICE_GRID_HOME);
                     break;
                 case DEVICE_SHAKE_SCANNING:
-                    motor_controller_.EndSideStepsCorr();
+                    ChangeMotorDirAbnormal();
                     break;
                 case DEVICE_GRID_IN_FIELD:
                 case DEVICE_GRID_HOME:
-                    motor_controller_.StopMotor();
+                    StopMotor();
                 case DEVICE_SCANNING:
                 case DEVICE_ERROR:
+                case DEVICE_INIT_STATE:
                     break;
             }
         }
     }
 
     void InFieldSwitchCheck(){
-        if(*grid_in_filed_sig_){
-            output_pin_container_[INDICATION_0].setValue(HIGH);
-            switch (currentStatus_) {
+        if(isSignalHigh(grid_in_filed_sig_)){
+            SetOutputSignal(INDICATION_0, HIGH);
+            switch (currentState_) {
                 case DEVICE_SERVICE_MOVING:
-                    motor_controller_.StopMotor();
-                    currentStatus_ = DEVICE_GRID_IN_FIELD;
+                    StopMotor();
+                    ChangeDeviceState(DEVICE_GRID_IN_FIELD);
                     break;
                 case DEVICE_SHAKE_SCANNING:
-                    motor_controller_.ChangeDirection();
+                    ChangeMotorDirAbnormal();
                     break;
                 case DEVICE_GRID_IN_FIELD:
                 case DEVICE_INIT_STATE:
@@ -95,7 +149,7 @@ public:
                     break;
             }
         }else
-            output_pin_container_[INDICATION_0].setValue(LOW);
+            SetOutputSignal(INDICATION_0, LOW);
     }
 
     void AnySwitchActiveCheck(){
@@ -106,60 +160,66 @@ public:
     }
 
     void ExpStateCheck(){
-        if(*exp_req_sig_ || currentStatus_ == DEVICE_SHAKE_SCANNING || currentStatus_ == DEVICE_SCANNING)
+        if(isSignalHigh(exp_req_sig_) || isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_SCANNING))
             ExpositionProcedure();
     }
 
-    void BoardUpdate(){
+    void UpdateInputSignalLevels(){
         for(auto &pin: input_pin_container_)
             pin.refresh();
+    }
+
+    void BoardUpdate(){
+        UpdateInputSignalLevels();
         ErrorsCheck();
         AnySwitchActiveCheck();
         ExpStateCheck();
     }
 
     void RasterMoveInField(){
-        if(*grid_in_filed_sig_){
-            currentStatus_ = DEVICE_GRID_IN_FIELD;
-            motor_controller_.StopMotor();
+        if(isSignalHigh(grid_in_filed_sig_)){
+            ChangeDeviceState(DEVICE_GRID_IN_FIELD);
+            StopMotor();
             return;
         }
         FreezeSwitchCheck();
-        currentStatus_ = DEVICE_SERVICE_MOVING;
+        ChangeDeviceState(DEVICE_SERVICE_MOVING);
         motor_controller_.get_position(Dir::FORWARD, true);
     }
 
     void FreezeSwitchCheck(){
-        if(currentStatus_ == DEVICE_SERVICE_MOVING)
+        if(isInState(DEVICE_SERVICE_MOVING))
             return;
         switch_ignore_flag_ = true;
         StartFreezeTimIT(170);
     }
 
     void RasterMoveHome(){
-        if(*grid_home_sig_){
-            currentStatus_ = DEVICE_GRID_HOME;
-            motor_controller_.StopMotor();
+        if(isSignalHigh(grid_home_sig_)){
+            ChangeDeviceState(DEVICE_GRID_HOME);
+            StopMotor();
             return;
         }
         FreezeSwitchCheck();
-        currentStatus_ = DEVICE_SERVICE_MOVING;
+        ChangeDeviceState(DEVICE_SERVICE_MOVING);
         motor_controller_.get_position(Dir::BACKWARDS, true);
     }
 
     void ExpRequestedOnHoneGrid(){
-        currentStatus_ = DEVICE_ERROR;
+        ChangeDeviceState(DEVICE_ERROR);
         currentError_ = EXP_REQ_ERROR;
     }
 
     void SetRasterInMotionSignal(LOGIC_LEVEL level){
 //        FreezeDeviceDelay(0);
-        output_pin_container_[IN_MOTION].setValue(level);
+        //todo change
+        SetOutputSignal(INDICATION_1, level);
+//        SetOutputSignal(IN_MOTION, level);
     }
 
     void StartShakeExposition(){
-        lastPosition_ = currentStatus_;
-        currentStatus_ = DEVICE_SHAKE_SCANNING;
+        lastPosition_ = currentState_;
+        ChangeDeviceState(DEVICE_SHAKE_SCANNING);
         FreezeSwitchCheck();
         motor_controller_.Exposition();
         motor_controller_.StepsCorrectionHack();
@@ -180,11 +240,11 @@ public:
 //            }
 //            return;
 //        }
-        switch (currentStatus_) {
+        switch (currentState_) {
             case DEVICE_GRID_IN_FIELD:
-                lastPosition_ = currentStatus_;
+                lastPosition_ = currentState_;
                 if(!kShakingScanEnabled_){
-                    currentStatus_ = DEVICE_SCANNING;
+                    ChangeDeviceState(DEVICE_SCANNING);
                     SetRasterInMotionSignal(HIGH);
                 }
                 else
@@ -195,12 +255,12 @@ public:
                     ExpRequestedOnHoneGrid();
                     return;
                 }
-                lastPosition_ = currentStatus_;
+                lastPosition_ = currentState_;
                 SetRasterInMotionSignal(HIGH);
-                currentStatus_ = DEVICE_SCANNING;
+                ChangeDeviceState(DEVICE_SCANNING);
                 break;
             case DEVICE_SHAKE_SCANNING:
-                if(motor_controller_.GetEvent() == EVENT_CSS)
+                if(motor_controller_.GetEvent() == StepperMotor::EVENT_CSS)
                     SetRasterInMotionSignal(HIGH);
                 break;
             default:
@@ -212,34 +272,49 @@ public:
         switch_ignore_flag_ = false;
     }
 
+    void ProcessMessage(){
+    }
+
+    void TimersTickHandler(){
+        for(auto & timer : timers_)
+            timer->TickHandle();
+    }
+
 private:
     explicit MainController(MotorController &incomeMotorController)
             :motor_controller_(incomeMotorController)
     {}
 
-    inline static constexpr int kPIN_CNT = 3;
-    std::array<InputPinType, kPIN_CNT> input_pin_container_{
+    AppTimer msgReqTim1{[this](){ProcessMessage();}};
+    AppTimer msgReqTim2{[this](){ProcessMessage();}};
+
+    std::array<AppTimer*, 2> timers_{
+        &msgReqTim1,
+        &msgReqTim2
+    };
+
+    static constexpr int kIN_PIN_CNT = 3;
+    std::array<InputPinType, kIN_PIN_CNT> input_pin_container_{
             InputPinType(EXP_REQ, EXP_REQ_IN_GPIO_Port, EXP_REQ_IN_Pin),
             InputPinType(GRID_HOME_DETECT, GRID_HOME_DETECT_GPIO_Port, GRID_HOME_DETECT_Pin),
             InputPinType(GRID_INFIELD_DETECT, GRID_INFIELD_DETECT_GPIO_Port,
                          GRID_INFIELD_DETECT_Pin),
     };
-    std::array<OutputPinType, kPIN_CNT> output_pin_container_{
+    static constexpr int kOUT_PIN_CNT = 3;
+    std::array<OutputPinType, kOUT_PIN_CNT> output_pin_container_{
             OutputPinType(INDICATION_0, INDICATION_0_OUT_GPIO_Port, INDICATION_0_OUT_Pin),
             OutputPinType(INDICATION_1, INDICATION_1_OUT_GPIO_Port, INDICATION_1_OUT_Pin),
             OutputPinType(IN_MOTION, IN_MOTION_OUT_GPIO_Port, IN_MOTION_OUT_Pin)
     };
 
-    const LOGIC_LEVEL* exp_req_sig_ = &input_pin_container_[EXP_REQ].currentState;
-    const LOGIC_LEVEL* grid_home_sig_ = &input_pin_container_[GRID_HOME_DETECT].currentState;
-    const LOGIC_LEVEL* grid_in_filed_sig_ = &input_pin_container_[GRID_INFIELD_DETECT].currentState;
-
-    const Button btn_grid_ = Button(GRID_BUTTON);
+    const LOGIC_LEVEL* exp_req_sig_ = input_pin_container_[EXP_REQ].GetPinStatePtr();
+    const LOGIC_LEVEL* grid_home_sig_ = input_pin_container_[GRID_HOME_DETECT].GetPinStatePtr();
+    const LOGIC_LEVEL* grid_in_filed_sig_ = input_pin_container_[GRID_INFIELD_DETECT].GetPinStatePtr();
 
     MotorController& motor_controller_;
 
     BOARD_STATUS_ERROR currentError_ = NO_ERROR;
-    volatile BOARD_STATUS currentStatus_ = DEVICE_INIT_STATE;
+    volatile BOARD_STATUS currentState_ = DEVICE_INIT_STATE;
     BOARD_STATUS lastPosition_ = DEVICE_SERVICE_MOVING;
     bool exposition_ON_status_ = false;
     bool tomo_signal_ = false;
@@ -249,8 +324,8 @@ private:
     bool switch_ignore_flag_ = false;
 
     void ErrorHandler_(BOARD_STATUS_ERROR error){
-        motor_controller_.StopMotor();
-        output_pin_container_[INDICATION_1].setValue(HIGH);
+        StopMotor();
+        SetOutputSignal(INDICATION_1, HIGH);
         switch (error) {
             case STANDBY_MOVEMENT_ERROR:
                 break;
@@ -266,4 +341,4 @@ private:
     }
 };
 
-#endif //RASTERDRIVER_MAINCONTROLLER_HPP
+#endif //RASTERDRIVER_MAIN_CONTROLLER_HPP
