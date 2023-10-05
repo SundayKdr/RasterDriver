@@ -6,8 +6,8 @@
 #include "StepperMotor/StepperMotor.hpp"
 #include "IO/PIN.hpp"
 #include "IO/Button.hpp"
-#include "global_.hpp"
-#include "app_timer.hpp"
+#include "global_define.hpp"
+#include "Timer/app_timer.hpp"
 
 using namespace RB::types;
 using namespace StepperMotor;
@@ -59,10 +59,12 @@ public:
 
     void ChangeMotorDirAbnormal(){
         FreezeSwitchCheck();
+        motor_controller_.ChangeDirection();
         motor_controller_.StepsCorrectionHack();
     }
 
     void CorrectExpoSteps(){
+        FreezeSwitchCheck();
         motor_controller_.EndSideStepsCorr();
     }
 
@@ -72,7 +74,7 @@ public:
         output_pin_container_[sigType].setValue(level);
     }
 
-    void BtnEventHandle(Button& btn){
+    constexpr void BtnEventHandle(Button& btn){
         if(btn.getState()){
             if(isInState(DEVICE_GRID_IN_FIELD))
                 StartShakeExposition();
@@ -117,7 +119,7 @@ public:
                     ChangeDeviceState(DEVICE_GRID_HOME);
                     break;
                 case DEVICE_SHAKE_SCANNING:
-                    ChangeMotorDirAbnormal();
+                    CorrectExpoSteps();
                     break;
                 case DEVICE_GRID_IN_FIELD:
                 case DEVICE_GRID_HOME:
@@ -152,8 +154,8 @@ public:
             SetOutputSignal(INDICATION_0, LOW);
     }
 
-    void AnySwitchActiveCheck(){
-        if(switch_ignore_flag_)
+    void LimitSwitchesCheck(){
+        if(switch_ignore_flag_) 
             return;
         HomeSwitchCheck();
         InFieldSwitchCheck();
@@ -172,7 +174,7 @@ public:
     void BoardUpdate(){
         UpdateInputSignalLevels();
         ErrorsCheck();
-        AnySwitchActiveCheck();
+        LimitSwitchesCheck();
         ExpStateCheck();
     }
 
@@ -184,7 +186,7 @@ public:
         }
         FreezeSwitchCheck();
         ChangeDeviceState(DEVICE_SERVICE_MOVING);
-        motor_controller_.get_position(Dir::FORWARD, true);
+        motor_controller_.GetPosition(Dir::FORWARD, true);
     }
 
     void FreezeSwitchCheck(){
@@ -202,7 +204,7 @@ public:
         }
         FreezeSwitchCheck();
         ChangeDeviceState(DEVICE_SERVICE_MOVING);
-        motor_controller_.get_position(Dir::BACKWARDS, true);
+        motor_controller_.GetPosition(Dir::BACKWARDS, true);
     }
 
     void ExpRequestedOnHoneGrid(){
@@ -214,7 +216,7 @@ public:
 //        FreezeDeviceDelay(0);
         //todo change
         SetOutputSignal(INDICATION_1, level);
-//        SetOutputSignal(IN_MOTION, level);
+        SetOutputSignal(IN_MOTION, level);
     }
 
     void StartShakeExposition(){
@@ -225,7 +227,7 @@ public:
         motor_controller_.StepsCorrectionHack();
     }
 
-    inline void ExpositionProcedure(){
+    void ExpositionProcedure(){
 //        if(!*exp_req_sig_){
 //            SetRasterInMotionSignal(LOW);
 //            switch (lastPosition_) {

@@ -82,7 +82,7 @@ public:
         return pin_;
     }
 
-    [[nodiscard]] LOGIC_LEVEL* GetPinStatePtr(){
+    [[nodiscard]] constexpr LOGIC_LEVEL* GetPinStatePtr(){
         return static_cast<LOGIC_LEVEL*>(&currentState_);
     }
 

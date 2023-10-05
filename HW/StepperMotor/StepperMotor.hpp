@@ -1,6 +1,3 @@
-//
-// Created by 79162 on 25.09.2021.
-//
 
 #ifndef TOMO_A4BOARD_STEPPERMOTOR_HPP
 #define TOMO_A4BOARD_STEPPERMOTOR_HPP
@@ -96,13 +93,15 @@ public:
         timerDividend_ = htim_ ? SystemCoreClock/(htim_->Instance->PSC) : 1;
     }
 
-    void motor_refresh(){
-        if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
+    void MotorRefresh(){
+        if(mode_ == IDLE || mode_ == Mode::in_ERROR)
+            return;
         if(accelerationMode_){
-            ReCalcSpeed();
             if(currentStep_ >= expo_distance_steps_)
                 ChangeDirection();
-            RegValueCalc_();
+            else
+                CalcSpeed();
+            CalcRegValue();
         }
         else{
             currentStep_++;
@@ -117,55 +116,21 @@ public:
         }
     }
 
-    void MotorMakeStep(){
-        if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
-        if(accelerationMode_){
-            ReCalcSpeed();
-            RegValueCalc_();
-        }
-        else
-            currentStep_++;
-    }
-
-    void MotorUpdate(){
-        if(mode_ == IDLE || mode_ == Mode::in_ERROR) return;
-        if(accelerationMode_){
-            if(currentStep_ >= expo_distance_steps_)
-                ChangeDirection();
-            if(mode_ == DECCEL && accel_step_ <= 0)
-            {
-                StopMotor();
-                mode_ = Mode::IDLE;
-                event_ = EVENT_STOP;
-            }
-        }
-        else{
-            if(currentStep_ >= kCriticalNofSteps_){
-                if(noReturn_) StopMotor();
-                else ChangeDirection();
-            }
-        }
-        if(direction_changed_ > 1){
-            StopMotor();
-            mode_ = Mode::in_ERROR;
-        }
-    }
-
-    void get_position(Direction dir, bool noRet = false){
+    void GetPosition(Direction dir, bool noRet = false){
         if(motorMoving_)
             StopMotor();
         accelerationMode_ = false;
         V_ = service_speed_;
         SetDirection(dir);
         if(noRet) noReturn_ = true;
-        StartMotor_();
+        StartMotor();
     }
 
-    void Exposition(){
+    void Exposition(Direction dir = Direction::BACKWARDS){
         accelerationMode_ = true;
         V_ = Vmin_;
-        SetDirection(Direction::BACKWARDS);
-        StartMotor_();
+        SetDirection(dir);
+        StartMotor();
     }
 
     void EndSideStepsCorr(){
@@ -188,9 +153,11 @@ public:
         if(!accelerationMode_)
             direction_changed_ += 1;
         SetDirection(static_cast<bool>(currentDirection_) ? Direction::BACKWARDS : Direction::FORWARD);
+        V_ = Vmin_;
+        mode_ = Mode::ACCEL;
+        CalcRegValue();
         currentStep_ = 0;
         accel_step_ = 0;
-        mode_ = Mode::ACCEL;
     }
 
     void StepsCorrectionHack(){
@@ -249,7 +216,7 @@ private:
     bool noReturn_ = false;
     uint8_t direction_changed_ = 0;
 
-    void StartMotor_(){
+    void StartMotor(){
         if(!motorMoving_){
             accel_step_ = 0;
             currentStep_ = 0;
@@ -257,11 +224,11 @@ private:
             direction_changed_ = 0;
             motorMoving_ = true;
             enable_.setValue(LOW);
-            RegValueCalc_();
+            CalcRegValue();
             HAL_TIM_PWM_Start_IT(htim_, timChannel_);
         }
     }
-    void RegValueCalc_(){
+    void CalcRegValue(){
         if(V_ > 0){
             uint32_t buf = timerDividend_ / uint32_t(V_);
             if(buf > 0 && buf < UINT16_MAX){
@@ -278,7 +245,7 @@ private:
         else direction_.setValue(LOGIC_LEVEL(currentDirection_));
     }
 
-    void ReCalcSpeed(){
+    void CalcSpeed(){
         if (mode_ == Mode::IDLE) return;
         switch (mode_)
         {
@@ -332,7 +299,8 @@ private:
         if (mode_ == Mode::ACCEL || mode_ == Mode::CONST || mode_ == Mode::DECCEL)
             currentStep_++;
     }
-
 };
+
 } //namespace StepperMotor
+
 #endif //TOMO_A4BOARD_STEPPERMOTOR_HPP

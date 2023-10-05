@@ -2,7 +2,7 @@
 #include "tim.h"
 #include "iwdg.h"
 #include "main_controller.hpp"
-#include "global_.hpp"
+#include "global_define.hpp"
 
 extern "C"
 {
@@ -24,7 +24,6 @@ extern "C"
             HAL_TIM_Base_Stop_IT(htim);
         }
         if(htim->Instance == TIM7){
-//            MainController::GetRef().BtnEventHandle(btn_grid_);
             MainController::GetRef().BtnEventHandle(GRID_BUTTON,
                                                     static_cast<LOGIC_LEVEL>(HAL_GPIO_ReadPin(GRID_BUTTON_GPIO_Port,
                                                                                               GRID_BUTTON_Pin)));
@@ -34,7 +33,7 @@ extern "C"
     void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM4){
-            MotorController::GetRef().motor_refresh();
+            MotorController::GetRef().MotorRefresh();
         }
     }
 

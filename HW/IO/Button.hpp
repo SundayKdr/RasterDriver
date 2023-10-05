@@ -20,17 +20,17 @@ struct Button{
     const uint16_t type_;
     PIN<PinReadable> pin_;
 
-    [[nodiscard]] inline constexpr uint16_t getType() const noexcept
+    [[nodiscard]] constexpr uint16_t getType() const noexcept
     {
         return type_;
     }
-    uint16_t operator()() const{
+    constexpr uint16_t operator()() const{
         return pin_.getPin();
     }
-    bool operator==(uint16_t otherPin) const{
+    constexpr bool operator==(uint16_t otherPin) const{
         return pin_.getPin() == otherPin;
     }
-    LOGIC_LEVEL getState(){
+    constexpr LOGIC_LEVEL getState(){
         return pin_.getValue();
     }
 };
