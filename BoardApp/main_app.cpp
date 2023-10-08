@@ -24,9 +24,7 @@ extern "C"
             HAL_TIM_Base_Stop_IT(htim);
         }
         if(htim->Instance == TIM7){
-            MainController::GetRef().BtnEventHandle(GRID_BUTTON,
-                                                    static_cast<LOGIC_LEVEL>(HAL_GPIO_ReadPin(GRID_BUTTON_GPIO_Port,
-                                                                                              GRID_BUTTON_Pin)));
+            MainController::GetRef().BtnEventHandle(btn_grid_);
         }
     }
 

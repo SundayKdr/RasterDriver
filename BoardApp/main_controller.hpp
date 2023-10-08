@@ -33,6 +33,8 @@ public:
     void BoardInit(){
         MotorController::LoadDriver(DIPSwitches_configureDriver());
         input_pin_container_[EXP_REQ].setInverted();
+        input_pin_container_[GRID_HOME_DETECT].setInverted();
+        input_pin_container_[GRID_INFIELD_DETECT].setInverted();
         RasterMoveHome();
     }
 
@@ -40,8 +42,8 @@ public:
        return currentState_ == status;
    }
 
-    static bool isSignalHigh(const LOGIC_LEVEL* signal){
-        return *signal;
+    bool isSignalHigh(INPUT_TYPE pin){
+        return static_cast<bool>(input_pin_container_[pin].getValue());
     }
 
     void ChangeDeviceState(BOARD_STATUS new_status){
@@ -77,30 +79,15 @@ public:
     constexpr void BtnEventHandle(Button& btn){
         if(btn.getState()){
             if(isInState(DEVICE_GRID_IN_FIELD))
-                StartShakeExposition();
-            else if((isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_GRID_HOME))){
-                SetRasterInMotionSignal(LOW);
+                RasterMoveHome();
+            else if(isInState(DEVICE_GRID_HOME))
                 RasterMoveInField();
-            }
-        }
-    }
-
-    void BtnEventHandle(BTN_TYPE btnT, LOGIC_LEVEL value){
-        switch (btnT) {
-            case GRID_BUTTON:
-//                if(value && isInState(DEVICE_GRID_IN_FIELD))
-//                    RasterMoveHome();
-//                else if(value && isInState(DEVICE_GRID_HOME))
-//                    RasterMoveInField();
-                if(value && (isInState(DEVICE_GRID_IN_FIELD)))
-                    StartShakeExposition();
-                else if(value && (isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_GRID_HOME))){
-                    SetRasterInMotionSignal(LOW);
-                    RasterMoveInField();
-                }
-                break;
-            default:
-                break;
+//            if(isInState(DEVICE_GRID_IN_FIELD))
+//                StartShakeExposition();
+//            else if((isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_GRID_HOME))){
+//                SetRasterInMotionSignal(LOW);
+//                RasterMoveInField();
+//            }
         }
     }
 
@@ -112,7 +99,7 @@ public:
     }
 
     void HomeSwitchCheck(){
-        if(isSignalHigh(grid_home_sig_)){
+        if(isSignalHigh(GRID_HOME_DETECT)){
             switch (currentState_) {
                 case DEVICE_SERVICE_MOVING:
                     StopMotor();
@@ -133,7 +120,7 @@ public:
     }
 
     void InFieldSwitchCheck(){
-        if(isSignalHigh(grid_in_filed_sig_)){
+        if(isSignalHigh(GRID_INFIELD_DETECT)){
             SetOutputSignal(INDICATION_0, HIGH);
             switch (currentState_) {
                 case DEVICE_SERVICE_MOVING:
@@ -162,24 +149,18 @@ public:
     }
 
     void ExpStateCheck(){
-        if(isSignalHigh(exp_req_sig_) || isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_SCANNING))
+        if(isSignalHigh(EXP_REQ) || isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_SCANNING))
             ExpositionProcedure();
     }
 
-    void UpdateInputSignalLevels(){
-        for(auto &pin: input_pin_container_)
-            pin.refresh();
-    }
-
     void BoardUpdate(){
-        UpdateInputSignalLevels();
         ErrorsCheck();
         LimitSwitchesCheck();
         ExpStateCheck();
     }
 
     void RasterMoveInField(){
-        if(isSignalHigh(grid_in_filed_sig_)){
+        if(isSignalHigh(GRID_INFIELD_DETECT)){
             ChangeDeviceState(DEVICE_GRID_IN_FIELD);
             StopMotor();
             return;
@@ -197,7 +178,7 @@ public:
     }
 
     void RasterMoveHome(){
-        if(isSignalHigh(grid_home_sig_)){
+        if(isSignalHigh(GRID_HOME_DETECT)){
             ChangeDeviceState(DEVICE_GRID_HOME);
             StopMotor();
             return;
@@ -289,7 +270,6 @@ private:
 
     AppTimer msgReqTim1{[this](){ProcessMessage();}};
     AppTimer msgReqTim2{[this](){ProcessMessage();}};
-
     std::array<AppTimer*, 2> timers_{
         &msgReqTim1,
         &msgReqTim2
@@ -298,9 +278,9 @@ private:
     static constexpr int kIN_PIN_CNT = 3;
     std::array<InputPinType, kIN_PIN_CNT> input_pin_container_{
             InputPinType(EXP_REQ, EXP_REQ_IN_GPIO_Port, EXP_REQ_IN_Pin),
-            InputPinType(GRID_HOME_DETECT, GRID_HOME_DETECT_GPIO_Port, GRID_HOME_DETECT_Pin),
-            InputPinType(GRID_INFIELD_DETECT, GRID_INFIELD_DETECT_GPIO_Port,
+            InputPinType(GRID_HOME_DETECT, GRID_INFIELD_DETECT_GPIO_Port,
                          GRID_INFIELD_DETECT_Pin),
+            InputPinType(GRID_INFIELD_DETECT, GRID_HOME_DETECT_GPIO_Port, GRID_HOME_DETECT_Pin),
     };
     static constexpr int kOUT_PIN_CNT = 3;
     std::array<OutputPinType, kOUT_PIN_CNT> output_pin_container_{
@@ -308,10 +288,6 @@ private:
             OutputPinType(INDICATION_1, INDICATION_1_OUT_GPIO_Port, INDICATION_1_OUT_Pin),
             OutputPinType(IN_MOTION, IN_MOTION_OUT_GPIO_Port, IN_MOTION_OUT_Pin)
     };
-
-    const LOGIC_LEVEL* exp_req_sig_ = input_pin_container_[EXP_REQ].GetPinStatePtr();
-    const LOGIC_LEVEL* grid_home_sig_ = input_pin_container_[GRID_HOME_DETECT].GetPinStatePtr();
-    const LOGIC_LEVEL* grid_in_filed_sig_ = input_pin_container_[GRID_INFIELD_DETECT].GetPinStatePtr();
 
     MotorController& motor_controller_;
 

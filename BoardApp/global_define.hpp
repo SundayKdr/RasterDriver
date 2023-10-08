@@ -3,17 +3,18 @@
 #define RASTERDRIVER_GLOBAL_DEFINE_HPP
 
 #define TIME_GRID_BTN_LONG_PRESS        1000
-#define TOTAL_DISTANCE_N_OF_STEPS       12000
-#define EXPO_DISTANCE_N_OF_STEPS        3000
-#define EXPO_REACH_DISTANCE_N_OF_STEPS  500
-#define LOAD_UNLOAD_SPEED               1985
+#define TOTAL_DISTANCE_N_OF_STEPS       9000
+#define DISTANCE_BEFORE_DECEL           7300
+#define EXPO_DISTANCE_N_OF_STEPS        600
+#define EXPO_REACH_DISTANCE_N_OF_STEPS  100
+#define LOAD_UNLOAD_SPEED               900
 #define START_SPEED                     1569
 
 #define CONFIG1_SPEED                   4535
 #define CONFIG2_SPEED                   3969
 #define CONFIG3_SPEED                   5003
 #define CONFIG4_SPEED                   7129
-#define CONFIG1_ACCELERATION            40
+#define CONFIG1_ACCELERATION            4
 #define CONFIG2_ACCELERATION            32
 #define CONFIG3_ACCELERATION            43
 #define CONFIG4_ACCELERATION            52

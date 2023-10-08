@@ -97,7 +97,7 @@ public:
         if(mode_ == IDLE || mode_ == Mode::in_ERROR)
             return;
         if(accelerationMode_){
-            if(currentStep_ >= expo_distance_steps_)
+            if(expo_move_ && (currentStep_ >= expo_distance_steps_))
                 ChangeDirection();
             else
                 CalcSpeed();
@@ -119,7 +119,7 @@ public:
     void GetPosition(Direction dir, bool noRet = false){
         if(motorMoving_)
             StopMotor();
-        accelerationMode_ = false;
+        accelerationMode_ = true;
         V_ = service_speed_;
         SetDirection(dir);
         if(noRet) noReturn_ = true;
@@ -128,6 +128,7 @@ public:
 
     void Exposition(Direction dir = Direction::BACKWARDS){
         accelerationMode_ = true;
+        expo_move_ = true;
         V_ = Vmin_;
         SetDirection(dir);
         StartMotor();
@@ -146,6 +147,7 @@ public:
             mode_ = Mode::IDLE;
             event_ = EVENT_STOP;
             noReturn_ = false;
+            expo_move_ = false;
         }
     }
 
@@ -205,6 +207,7 @@ private:
     int kCriticalNofSteps_ = 0;
     int reach_steps_ = 0;
     int expo_distance_steps_ = 0;
+    int steps_to_stop_ = 7300;
     float service_speed_ = (float)0;
 
     bool directionInverted_ = false;
@@ -213,6 +216,7 @@ private:
     MOTOR_EVENT event_ = EVENT_STOP;
     bool motorMoving_ = false;
     bool accelerationMode_ = false;
+    bool expo_move_ = false;
     bool noReturn_ = false;
     uint8_t direction_changed_ = 0;
 
@@ -259,7 +263,7 @@ private:
                 }else
                     V_ += A_;
 
-                if (accel_step_ >= expo_distance_steps_ / 2)
+                if (expo_move_ && (accel_step_ >= expo_distance_steps_ / 2))
                 {
                     mode_ = Mode::DECCEL;
                     break;
@@ -270,8 +274,13 @@ private:
 
             case Mode::CONST:
             {
-                if (currentStep_ + accel_step_ >= expo_distance_steps_) {
-                    mode_ = Mode::DECCEL;
+                if(expo_move_){
+                    if(currentStep_ + accel_step_ >= expo_distance_steps_)
+                        mode_ = Mode::DECCEL;
+                }
+                else{
+                    if(currentStep_ + accel_step_ >= steps_to_stop_)
+                        mode_ = Mode::DECCEL;
                 }
             }
                 break;
@@ -283,7 +292,11 @@ private:
                     V_ -= A_;
                     if (V_ < Vmin_) V_ = Vmin_;
                     accel_step_--;
-                }else{
+
+                }else if(!expo_move_){
+
+                }
+                else{
                     StopMotor();
                     mode_ = Mode::IDLE;
                     event_ = EVENT_STOP;
