@@ -2,16 +2,16 @@
 #include "tim.h"
 #include "iwdg.h"
 #include "main_controller.hpp"
-#include "global_define.hpp"
+#include "app_config.hpp"
 
 extern "C"
 {
-    Button btn_grid_ = Button(GRID_BUTTON, GRID_BUTTON_GPIO_Port, GRID_BUTTON_Pin);
-
 //    void HAL_IncTick() {
 //        uwTick += uwTickFreq;
-//        MainController::GetRef().TimersTickHandler();
+//        MainController::GetRef().SysTickTimersTickHandler();
 //    }
+
+    Button btn_grid_ = Button(GRID_BUTTON_GPIO_Port, GRID_BUTTON_Pin);
 
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
@@ -20,7 +20,7 @@ extern "C"
             MainController::GetRef().BoardUpdate();
         }
         if(htim->Instance == TIM6){
-            MainController::GetRef().UnFreezeSwitches();
+            MainController::GetRef().TimTaskHandler();
             HAL_TIM_Base_Stop_IT(htim);
         }
         if(htim->Instance == TIM7){
@@ -35,32 +35,22 @@ extern "C"
         }
     }
 
-//    bool btn_grid_pressed = true;
+    bool btn_grid_pressed = false;
 //    uint32_t time_gridBTN_pressed;
     void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     {
-        if(GPIO_Pin == GRID_BUTTON_Pin){
-            MainController::GetRef().BtnEventHandle(btn_grid_);
-//            MainController::GetRef().BtnEventHandle(GRID_BUTTON,
-//                                                    static_cast<LOGIC_LEVEL>(HAL_GPIO_ReadPin(GRID_BUTTON_GPIO_Port,
-//                                                                                              GRID_BUTTON_Pin)));
-        }
-//        switch (GPIO_Pin) {
-//            case GRID_BUTTON_Pin:
-//                if(btn_grid_pressed){
-//                    if((HAL_GetTick() - time_gridBTN_pressed) > TIME_GRID_BTN_LONG_PRESS)
-//                        mainController.BtnEventHandle(btn_grid_, HIGH);
-//                }else
-//                    time_gridBTN_pressed = HAL_GetTick();
-//                btn_grid_pressed = !btn_grid_pressed;
-//                if(btn_grid_pressed)
-//                    HAL_TIM_Base_Start_IT(&htim7);
-//                else
-//                    HAL_TIM_Base_Stop_IT(&htim7);
-//                break;
-//            default:
-//                break;
+//        if(GPIO_Pin == btn_grid_){
+//            MainController::GetRef().BtnEventHandle(btn_grid_);
 //        }
+        if(GPIO_Pin == btn_grid_){
+//            if(btn_grid_pressed){
+//                if((HAL_GetTick() - time_gridBTN_pressed) > TIME_GRID_BTN_LONG_PRESS)
+//                    MainController::GetRef().BtnEventHandle(btn_grid_);
+//            }else
+//                time_gridBTN_pressed = HAL_GetTick();
+            btn_grid_pressed = !btn_grid_pressed;
+            btn_grid_pressed ? HAL_TIM_Base_Start_IT(&htim7) : HAL_TIM_Base_Stop_IT(&htim7);
+        }
     }
 
     void EXTI_clear_enable(){
@@ -76,6 +66,5 @@ extern "C"
     }
 
     void AppLoop()
-    {
-    }
+    {}
 }

@@ -10,20 +10,14 @@
 using namespace pin_impl;
 
 struct Button{
-    constexpr explicit Button(uint16_t incomeType, GPIO_TypeDef* port, uint16_t pin) noexcept
-        : type_(incomeType),
-        pin_(incomeType, port, pin)
+    constexpr explicit Button(GPIO_TypeDef* port, uint16_t pin) noexcept
+        : pin_(port, pin)
     {
         pin_.setInverted();
     }
 
-    const uint16_t type_;
     PIN<PinReadable> pin_;
 
-    [[nodiscard]] constexpr uint16_t getType() const noexcept
-    {
-        return type_;
-    }
     constexpr uint16_t operator()() const{
         return pin_.getPin();
     }

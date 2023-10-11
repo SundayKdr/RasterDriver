@@ -63,17 +63,6 @@ public:
         port_->BSRR = ((odr & pin_) << 16U) | (~odr & pin_);
     }
 
-    PIN() = delete;
-    PIN(PIN&) = delete;
-    const PIN& operator=(const PIN &) = delete;
-    PIN& operator=(PIN &) = delete;
-
-    constexpr explicit PIN(uint16_t incomeName, GPIO_TypeDef* incomePortPtr, uint16_t incomePin)
-            : pinType_(incomeName),
-              port_(incomePortPtr),
-              pin_(incomePin)
-    {};
-
     constexpr void setInverted() {
         inverted_ = true;
     }
@@ -86,14 +75,21 @@ public:
         return static_cast<LOGIC_LEVEL*>(&currentState_);
     }
 
+    PIN() = delete;
+
+    constexpr explicit PIN(GPIO_TypeDef* incomePortPtr, uint16_t incomePin)
+            : port_(incomePortPtr),
+              pin_(incomePin)
+    {};
+
 protected:
 private:
     LOGIC_LEVEL currentState_ = LOW;
-    const uint16_t pinType_;
-
     GPIO_TypeDef* port_;
     uint16_t pin_;
     bool inverted_ = false;
 };
+
 } // namespace pin_impl
+
 #endif //SND_STM32_PIN_HPP
