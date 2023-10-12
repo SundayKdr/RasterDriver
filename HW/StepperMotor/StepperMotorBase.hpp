@@ -75,11 +75,11 @@ namespace StepperMotor{
 
         virtual void AppCorrection() = 0;
 
-        void StartMotor(float acceleration,
-                        float start_speed,
-                        float max_speed,
-                        Direction dir = currentDirection_,
-                        uint32_t steps = kCriticalNofSteps_)
+        void MakeMotorTask(float acceleration,
+                           float start_speed,
+                           float max_speed,
+                           Direction dir = currentDirection_,
+                           uint32_t steps = kCriticalNofSteps_)
         {
             if(motorMoving_)
                 StopMotor();
@@ -153,7 +153,7 @@ namespace StepperMotor{
         uint32_t timerDividend_;
 
         inline static uint32_t kCriticalNofSteps_ {0};
-        uint32_t steps_to_go_ {0};
+        int steps_to_go_ {0};
 
         int currentStep_ {0};
         int accel_step_ {0};

@@ -28,27 +28,34 @@ public:
         return motorController;
     }
 
+    void GetPositionSlow(StepperMotor::Direction dir){
+        current_move_mode_ = MoveMode::kService_slow;
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, INIT_MOVE_MAX_SPEED,
+                      dir);
+    }
+
     void GetPosition(StepperMotor::Direction dir){
         current_move_mode_ = MoveMode::kService_accel;
-        StartMotor(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, SERVICE_MOVE_MAX_SPEED,
-                   dir, steps_to_stop_);
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, SERVICE_MOVE_MAX_SPEED,
+                      dir, steps_to_stop_);
     }
 
     void MakeStepsAfterSwitch(int steps = STEPS_AFTER_SWITCH){
         current_move_mode_ = MoveMode::kSwitch_press;
-        StartMotor(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, SERVICE_MOVE_START_SPEED,
-                   currentDirection_, steps);
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, 300, 300,
+                      currentDirection_, steps);
     }
 
     void Exposition(StepperMotor::Direction dir = StepperMotor::Direction::BACKWARDS){
         current_move_mode_ = MoveMode::kExpo;
-        StartMotor(config_acceleration_, SERVICE_MOVE_START_SPEED, config_Vmax_,
+        MakeMotorTask(config_acceleration_, SERVICE_MOVE_START_SPEED, config_Vmax_,
                    dir, expo_distance_steps_);
         StepsCorrectionHack();
     }
 
-    void ChangeDirAbnormal(){
-        ChangeDirection();
+    void ChangeDirAbnormalExpo(){
+        if(currentDirection_ == StepperMotor::Direction::BACKWARDS)
+            ChangeDirection();
         StepsCorrectionHack();
     }
 
@@ -67,11 +74,12 @@ public:
                 if(currentStep_ >= steps_to_go_)
                     ChangeDirection();
                 break;
-            case MoveMode::kService_accel:
-            case MoveMode::kSwitch_press:
             case MoveMode::kService_slow:
+            case MoveMode::kSwitch_press:
                 if(currentStep_ >= steps_to_go_)
                     StopMotor();
+                break;
+            case MoveMode::kService_accel:
                 break;
         }
     }

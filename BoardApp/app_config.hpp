@@ -9,7 +9,7 @@
 #define STEPS_BEFORE_DECCEL             7300
 #define EXPO_DISTANCE_STEPS             600
 #define EXPO_REACH_STEPS                100
-#define STEPS_AFTER_SWITCH              5
+#define STEPS_AFTER_SWITCH              45
 
 #define CONFIG1_SPEED                   4535
 #define CONFIG2_SPEED                   7129
@@ -17,8 +17,9 @@
 #define CONFIG2_ACCELERATION            52
 
 #define SERVICE_MOVE_ACCELERATION       4.0
-#define SERVICE_MOVE_START_SPEED        900
-#define SERVICE_MOVE_MAX_SPEED          4535.0
+#define SERVICE_MOVE_START_SPEED        500
+#define INIT_MOVE_MAX_SPEED             2000
+#define SERVICE_MOVE_MAX_SPEED          3000
 
 //static void FreezeDeviceDelay(uint32_t delay){
 //    uint16_t msDelay = delay * 10 > UINT16_MAX ? UINT16_MAX : delay * 10;

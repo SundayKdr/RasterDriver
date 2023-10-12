@@ -13,7 +13,7 @@ struct Button{
     constexpr explicit Button(GPIO_TypeDef* port, uint16_t pin) noexcept
         : pin_(port, pin)
     {
-        pin_.setInverted();
+//        pin_.setInverted();
     }
 
     PIN<PinReadable> pin_;
