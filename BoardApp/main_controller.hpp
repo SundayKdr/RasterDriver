@@ -217,9 +217,7 @@ public:
     }
 
     void SetInMotionSig(LOGIC_LEVEL level){
-        if(isSignalHigh(EXP_REQ)){
-            SetOutputSignal(IN_MOTION, level);
-        }
+        SetOutputSignal(IN_MOTION, level);
     }
 
     void StartShakeExposition(){
@@ -234,10 +232,14 @@ public:
             SetInMotionSig(LOW);
             switch (lastPosition_) {
                 case DEVICE_GRID_HOME:
-                    RasterMoveHome();
+                    ChangeDeviceState(DEVICE_GRID_HOME);
+                    if(kShakingScanEnabled_)
+                        RasterMoveHome();
                     break;
                 case DEVICE_GRID_IN_FIELD:
-                    RasterMoveInField();
+                    ChangeDeviceState(DEVICE_GRID_IN_FIELD);
+                    if(kShakingScanEnabled_)
+                        RasterMoveInField();
                     break;
                 default:
                     break;
@@ -333,7 +335,7 @@ private:
     bool tomo_signal_ {false};
     bool kShakingScanEnabled_ {false};
     bool switch_ignore_flag_ {false};
-    const bool kRasterHomeExpReqIsOk_ {false};
+    const bool kRasterHomeExpReqIsOk_ {true};
 
     void ErrorHandler_(BOARD_STATUS_ERROR error){
         StopMotor();
