@@ -16,7 +16,6 @@ using namespace pin_impl;
 class MainController {
     using InputPinType = PIN<PinReadable>;
     using OutputPinType = PIN<PinWriteable>;
-    using Dir = StepperMotor::Direction;
     using MotorStatus = StepperMotor::Mode;
 public:
     const MainController& operator=(const MainController &) = delete;
@@ -48,18 +47,6 @@ public:
         RasterMoveHome(true);
     }
 
-    bool isInState(BOARD_STATUS status){
-       return currentState_ == status;
-   }
-
-    bool isSignalHigh(INPUT_TYPE pin){
-        return static_cast<bool>(input_pin_container_[pin].getValue());
-    }
-
-    void ChangeDeviceState(BOARD_STATUS new_status){
-       currentState_ = new_status;
-    }
-
     void StopMotor(){
         motor_controller_.StopMotor();
     }
@@ -75,12 +62,7 @@ public:
         motor_controller_.EndSideStepsCorr();
     }
 
-    void SetOutputSignal(OUTPUT_TYPE sigType, LOGIC_LEVEL level){
-        output_pin_container_[sigType].setValue(level);
-    }
-
     void BtnEventHandle(Button& btn){
-//        if(btn.getState()){
 //            if(isInState(DEVICE_SHAKE_SCANNING))
 //                RasterMoveInField(true);
 //            if(kShakingScanEnabled_ && isInState(DEVICE_GRID_IN_FIELD))
@@ -89,13 +71,6 @@ public:
                 RasterMoveHome();
             else if(isInState(DEVICE_GRID_HOME))
                 RasterMoveInField();
-//            if(isInState(DEVICE_GRID_IN_FIELD))
-//                StartShakeExposition();
-//            else if((isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_GRID_HOME))){
-//                SetInMotionSig(LOW);
-//                RasterMoveInField();
-//            }
-//        }
     }
 
     void ErrorsCheck(){
@@ -103,6 +78,13 @@ public:
             currentError_ = LIMIT_SWITCH_ERROR;
         if(currentError_ != NO_ERROR)
             ErrorHandler_(currentError_);
+    }
+
+    void LimitSwitchesCheck(){
+        if(switch_ignore_flag_)
+            return;
+        HomeSwitchCheck();
+        InFieldSwitchCheck();
     }
 
     void HomeSwitchCheck(){
@@ -129,11 +111,6 @@ public:
             SetOutputSignal(INDICATION_0, LOW);
     }
 
-    void MoveCloserToSwitch(){
-        FreezeSwitchCheck();
-        motor_controller_.MakeStepsAfterSwitch();
-    }
-
     void InFieldSwitchCheck(){
         if(isSignalHigh(GRID_INFIELD_DETECT)){
             switch (currentState_) {
@@ -155,20 +132,12 @@ public:
         }
     }
 
-    void LimitSwitchesCheck(){
-        if(switch_ignore_flag_) 
-            return;
-        HomeSwitchCheck();
-        InFieldSwitchCheck();
-    }
-
-    void ExpStateCheck(){
-        if(isSignalHigh(EXP_REQ) || isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_SCANNING))
-            ExpositionProcedure();
+    void MoveCloserToSwitch(){
+        FreezeSwitchCheck();
+        motor_controller_.MakeStepsAfterSwitch();
     }
 
     void BoardUpdate(){
-        UpdateConfig();
         ErrorsCheck();
         LimitSwitchesCheck();
         ExpStateCheck();
@@ -182,16 +151,7 @@ public:
         }
         FreezeSwitchCheck();
         ChangeDeviceState(DEVICE_SERVICE_MOVING);
-        slow ? motor_controller_.GetPositionSlow(Dir::FORWARD) :
-            motor_controller_.GetPosition(Dir::FORWARD);
-    }
-
-    void FreezeSwitchCheck(uint16_t delay = 300){
-        if(isInState(DEVICE_SERVICE_MOVING))
-            return;
-        current_tim_task_ = FREEZE_SWITCH_TASK;
-        switch_ignore_flag_ = true;
-        StartTaskTimIT(delay);
+        motor_controller_.GetInFieldPosition(slow);
     }
 
     void RasterMoveHome(bool slow = false){
@@ -202,8 +162,7 @@ public:
         }
         FreezeSwitchCheck();
         ChangeDeviceState(DEVICE_SERVICE_MOVING);
-        slow ? motor_controller_.GetPositionSlow(Dir::BACKWARDS) :
-                motor_controller_.GetPosition(Dir::BACKWARDS);
+        motor_controller_.GetHomePosition(slow);
     }
 
     void ExpRequestedOnHoneGrid(){
@@ -227,6 +186,11 @@ public:
         motor_controller_.Exposition();
     }
 
+    void ExpStateCheck(){
+        if(isSignalHigh(EXP_REQ) || isInState(DEVICE_SHAKE_SCANNING) || isInState(DEVICE_SCANNING))
+            ExpositionProcedure();
+    }
+
     void ExpositionProcedure(){
         if(!isSignalHigh(EXP_REQ)){
             SetInMotionSig(LOW);
@@ -234,12 +198,12 @@ public:
                 case DEVICE_GRID_HOME:
                     ChangeDeviceState(DEVICE_GRID_HOME);
                     if(kShakingScanEnabled_)
-                        RasterMoveHome();
+                        RasterMoveHome(true);
                     break;
                 case DEVICE_GRID_IN_FIELD:
                     ChangeDeviceState(DEVICE_GRID_IN_FIELD);
                     if(kShakingScanEnabled_)
-                        RasterMoveInField();
+                        RasterMoveInField(true);
                     break;
                 default:
                     break;
@@ -288,10 +252,6 @@ public:
         current_tim_task_ = NO_TASKS;
     }
 
-    void UnFreezeSwitches(){
-        switch_ignore_flag_ = false;
-    }
-
 //    void SysTickTimersTickHandler(){
 //        for(auto & timer : timers_)
 //            timer->TickHandle();
@@ -300,16 +260,16 @@ public:
 //    }
 
 private:
-    explicit MainController(MotorController &incomeMotorController)
-            :motor_controller_(incomeMotorController)
-    {}
-
 //    AppTimer msgReqTim1{[this](){ProcessMessage();}};
 //    AppTimer msgReqTim2{[this](){ProcessMessage();}};
 //    std::array<AppTimer*, 2> timers_{
 //        &msgReqTim1,
 //        &msgReqTim2
 //    };
+
+    explicit MainController(MotorController &incomeMotorController)
+            :motor_controller_(incomeMotorController)
+    {}
 
     static constexpr int kIN_PIN_CNT = 3;
     std::array<InputPinType, kIN_PIN_CNT> input_pin_container_{
@@ -331,8 +291,6 @@ private:
     BOARD_STATUS currentState_ {DEVICE_INIT_STATE};
     BOARD_STATUS lastPosition_ {DEVICE_SERVICE_MOVING};
 
-    bool exposition_ON_status_ {false};
-    bool tomo_signal_ {false};
     bool kShakingScanEnabled_ {false};
     bool switch_ignore_flag_ {false};
     const bool kRasterHomeExpReqIsOk_ {true};
@@ -352,6 +310,34 @@ private:
         }
         Error_Handler();
         while (true){};
+    }
+
+    bool isInState(BOARD_STATUS status){
+        return currentState_ == status;
+    }
+
+    bool isSignalHigh(INPUT_TYPE pin){
+        return static_cast<bool>(input_pin_container_[pin].getValue());
+    }
+
+    void ChangeDeviceState(BOARD_STATUS new_status){
+        currentState_ = new_status;
+    }
+
+    void UnFreezeSwitches(){
+        switch_ignore_flag_ = false;
+    }
+
+    void FreezeSwitchCheck(uint16_t delay = 300){
+        if(isInState(DEVICE_SERVICE_MOVING))
+            return;
+        current_tim_task_ = FREEZE_SWITCH_TASK;
+        switch_ignore_flag_ = true;
+        StartTaskTimIT(delay);
+    }
+
+    void SetOutputSignal(OUTPUT_TYPE sigType, LOGIC_LEVEL level){
+        output_pin_container_[sigType].setValue(level);
     }
 };
 

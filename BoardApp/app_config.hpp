@@ -18,7 +18,7 @@
 
 #define SERVICE_MOVE_ACCELERATION       4.0
 #define SERVICE_MOVE_START_SPEED        500
-#define INIT_MOVE_MAX_SPEED             2000
+#define INIT_MOVE_MAX_SPEED             1500
 #define SERVICE_MOVE_MAX_SPEED          3000
 
 //static void FreezeDeviceDelay(uint32_t delay){
