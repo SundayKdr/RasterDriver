@@ -133,7 +133,7 @@ public:
     }
 
     void MoveCloserToSwitch(){
-        FreezeSwitchCheck();
+        FreezeSwitchCheck(200);
         motor_controller_.MakeStepsAfterSwitch();
     }
 

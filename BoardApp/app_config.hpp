@@ -7,14 +7,14 @@
 #define TIME_GRID_BTN_LONG_PRESS        1000
 #define TOTAL_DISTANCE_N_OF_STEPS       9000
 #define STEPS_BEFORE_DECCEL             7300
-#define EXPO_DISTANCE_STEPS             600
-#define EXPO_REACH_STEPS                100
-#define STEPS_AFTER_SWITCH              45
+#define EXPO_DISTANCE_STEPS             300
+#define EXPO_REACH_STEPS                10
+#define STEPS_AFTER_SWITCH              10
 
-#define CONFIG1_SPEED                   4535
-#define CONFIG2_SPEED                   7129
-#define CONFIG1_ACCELERATION            32
-#define CONFIG2_ACCELERATION            52
+#define CONFIG1_SPEED                   1700
+#define CONFIG2_SPEED                   3400
+#define CONFIG1_ACCELERATION            40
+#define CONFIG2_ACCELERATION            45
 
 #define SERVICE_MOVE_ACCELERATION       4.0
 #define SERVICE_MOVE_START_SPEED        500
