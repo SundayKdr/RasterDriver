@@ -27,7 +27,11 @@ public:
         static MotorController motorController(getDIPConfig());
         return motorController;
     }
-
+    void MoveToPos(StepperMotor::Direction dir, uint32_t steps){
+        current_move_mode_ = MoveMode::kService_slow;
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, INIT_MOVE_MAX_SPEED,
+                      dir, steps);
+    }
     void GetPositionSlow(StepperMotor::Direction dir){
         current_move_mode_ = MoveMode::kService_slow;
         MakeMotorTask(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, INIT_MOVE_MAX_SPEED,

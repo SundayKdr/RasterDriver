@@ -19,6 +19,9 @@ extern "C"
             HAL_IWDG_Refresh(&hiwdg);
             MainController::GetRef().BoardUpdate();
         }
+        if(htim->Instance == TIM3){
+            MainController::GetRef().UpdateConfig();
+        }
         if(htim->Instance == TIM6){
             HAL_TIM_Base_Stop_IT(htim);
             MainController::GetRef().TimTaskHandler();
@@ -55,6 +58,7 @@ extern "C"
     void TIM_IT_clear_(){
         __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim6, TIM_IT_UPDATE);
+        __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
     }
 
@@ -62,6 +66,7 @@ extern "C"
         EXTI_clear_enable();
         TIM_IT_clear_();
         HAL_TIM_Base_Start_IT(&htim1);
+        HAL_TIM_Base_Start_IT(&htim3);
         MainController::GetRef().BoardInit();
     }
 

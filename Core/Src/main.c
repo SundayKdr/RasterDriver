@@ -95,7 +95,7 @@ int main(void)
   MX_TIM7_Init();
   MX_TIM6_Init();
   MX_IWDG_Init();
-  MX_TIM2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
     AppInit();
   /* USER CODE END 2 */
