@@ -1,13 +1,15 @@
-
-#ifndef RASTERDRIVER_MAIN_CONTROLLER_HPP
-#define RASTERDRIVER_MAIN_CONTROLLER_HPP
+#pragma once
 
 #include <array>
+#include <optional>
+#include <functional>
+
+#include "motor_impl.hpp"
+
 #include "IO/PIN.hpp"
 #include "IO/Button.hpp"
 #include "app_config.hpp"
 //#include "Timer/app_timer.hpp"
-#include "MotorImpl.hpp"
 
 using namespace RB::types;
 using namespace StepperMotor;
@@ -45,7 +47,18 @@ public:
     void BoardInit(){
         UpdateConfig();
         InvertPins();
-        RasterMoveHome(true);
+        InitialMove();
+    }
+
+    void InitialMove(){
+        if(isSignalHigh(GRID_HOME_DETECT)){
+            ChangeDeviceState(DEVICE_SERVICE_MOVING);
+            motor_controller_.MoveToPos(Dir::FORWARD, RUN_OUT_STEPS);
+            pending_move_ = [&]{ RasterMoveHome(true); };
+        }else{
+            ChangeDeviceState(DEVICE_MOVE_HOME);
+            motor_controller_.MoveToEndPointSlow(Dir::BACKWARDS);
+        }
     }
 
     bool isInState(BOARD_STATUS status){
@@ -64,24 +77,17 @@ public:
         motor_controller_.StopMotor();
     }
 
-    void ChangeMotorDirAbnormalExpo(){
-//        FreezeSwitchCheck();
-//        motor_controller_.ChangeDirAbnormalExpo();
+    void SlowStopMotor(){
+        ChangeDeviceState(RB::types::DEVICE_SERVICE_MOVING);
+        motor_controller_.DecelAndStop();
     }
 
     void CorrectExpoSteps(){
-//        FreezeSwitchCheck();
         motor_controller_.EndSideStepsCorr();
     }
 
     void SetOutputSignal(OUTPUT_TYPE sigType, LOGIC_LEVEL level){
         output_pin_container_[sigType].setValue(level);
-    }
-
-    void MoveToPos(){
-//        FreezeSwitchCheck();
-        ChangeDeviceState(DEVICE_POSITION);
-        motor_controller_.MoveToPos(Dir::BACKWARDS, 300);
     }
 
     void BtnEventHandle(Button& btn){
@@ -96,6 +102,13 @@ public:
             currentError_ = LIMIT_SWITCH_ERROR;
         if(currentError_ != NO_ERROR)
             ErrorHandler_(currentError_);
+    }
+
+    void LimitSwitchesCheck(){
+        if(switch_ignore_flag_)
+            return;
+        HomeSwitchCheck();
+        InFieldSwitchCheck();
     }
 
     void HomeSwitchCheck(){
@@ -113,21 +126,12 @@ public:
                 case DEVICE_GRID_IN_FIELD:
                 case DEVICE_GRID_HOME:
                     StopMotor();
-                case DEVICE_SERVICE_MOVING:
-                case DEVICE_MOVE_IN_FIELD:
-                case DEVICE_POSITION:
-                case DEVICE_SCANNING:
-                case DEVICE_ERROR:
-                case DEVICE_INIT_STATE:
+                    break;
+                default:
                     break;
             }
         }else
             SetOutputSignal(INDICATION_0, LOW);
-    }
-
-    void MoveCloserToSwitch(){
-        FreezeSwitchCheck(50);
-        motor_controller_.MakeStepsAfterSwitch();
     }
 
     void InFieldSwitchCheck(){
@@ -138,27 +142,15 @@ public:
 //                    MoveCloserToSwitch();
                     ChangeDeviceState(DEVICE_GRID_IN_FIELD);
                     break;
-                case DEVICE_SHAKE_SCANNING:
-                    ChangeMotorDirAbnormalExpo();
-                    break;
-                case DEVICE_SERVICE_MOVING:
-                case DEVICE_MOVE_HOME:
-                case DEVICE_POSITION:
-                case DEVICE_GRID_IN_FIELD:
-                case DEVICE_INIT_STATE:
-                case DEVICE_GRID_HOME:
-                case DEVICE_SCANNING:
-                case DEVICE_ERROR:
+                default:
                     break;
             }
         }
     }
 
-    void LimitSwitchesCheck(){
-        if(switch_ignore_flag_) 
-            return;
-        HomeSwitchCheck();
-        InFieldSwitchCheck();
+    void MoveCloserToSwitch(){
+        FreezeSwitchCheck(50);
+        motor_controller_.MakeStepsAfterSwitch();
     }
 
     void ExpStateCheck(){
@@ -166,20 +158,19 @@ public:
             ExpositionProcedure();
     }
 
+    void CheckPendingMove(){
+        if(pending_move_ && (!motor_controller_.IsMotorMoving())){
+            auto callable = pending_move_.value();
+            pending_move_.reset();
+            callable();
+        }
+    }
+
     void BoardUpdate(){
         ErrorsCheck();
         LimitSwitchesCheck();
         ExpStateCheck();
-    }
-
-    void RasterMoveInFieldAfterExpo(){
-        if(isSignalHigh(GRID_INFIELD_DETECT)){
-            ChangeDeviceState(DEVICE_GRID_IN_FIELD);
-            StopMotor();
-            return;
-        }
-        ChangeDeviceState(DEVICE_MOVE_IN_FIELD);
-        motor_controller_.GetPositionSlow(Dir::FORWARD);
+        CheckPendingMove();
     }
 
     void RasterMoveInField(bool slow = false){
@@ -188,10 +179,20 @@ public:
             StopMotor();
             return;
         }
-//        FreezeSwitchCheck();
         ChangeDeviceState(DEVICE_MOVE_IN_FIELD);
-        slow ? motor_controller_.GetPositionSlow(Dir::FORWARD) :
-            motor_controller_.GetPosition(Dir::FORWARD);
+        slow ? motor_controller_.MoveToEndPointSlow(Dir::FORWARD) :
+        motor_controller_.MoveToEndPointFast(Dir::FORWARD);
+    }
+
+    void RasterMoveHome(bool slow = false){
+        if(isSignalHigh(GRID_HOME_DETECT)){
+            ChangeDeviceState(DEVICE_GRID_HOME);
+            StopMotor();
+            return;
+        }
+        ChangeDeviceState(DEVICE_MOVE_HOME);
+        slow ? motor_controller_.MoveToEndPointSlow(Dir::BACKWARDS) :
+        motor_controller_.MoveToEndPointFast(Dir::BACKWARDS);
     }
 
     void FreezeSwitchCheck(uint16_t delay = 300){
@@ -202,26 +203,34 @@ public:
         StartTaskTimIT(delay);
     }
 
-    void RasterMoveHomeAfterExpo(){
-        if(isSignalHigh(GRID_HOME_DETECT)){
-            ChangeDeviceState(DEVICE_GRID_HOME);
-            StopMotor();
-            return;
-        }
-        ChangeDeviceState(DEVICE_MOVE_HOME);
-        motor_controller_.GetPositionSlow(Dir::BACKWARDS);
+    void RasterMoveInFieldAfterExpo(){
+        SlowStopMotor();
+        pending_move_ = [&]{
+            motor_controller_.MoveToPos(Dir::BACKWARDS, RUN_OUT_STEPS);
+            pending_move_ = [&]{ RasterMoveInField(true); };
+        };
+//        if(isSignalHigh(GRID_INFIELD_DETECT)){
+//            ChangeDeviceState(DEVICE_GRID_IN_FIELD);
+//            StopMotor();
+//            return;
+//        }
+//        ChangeDeviceState(DEVICE_MOVE_IN_FIELD);
+//        motor_controller_.MoveToEndPointSlow(Dir::FORWARD);
     }
 
-    void RasterMoveHome(bool slow = false){
-        if(isSignalHigh(GRID_HOME_DETECT)){
-            ChangeDeviceState(DEVICE_GRID_HOME);
-            StopMotor();
-            return;
-        }
-//        FreezeSwitchCheck();
-        ChangeDeviceState(DEVICE_MOVE_HOME);
-        slow ? motor_controller_.GetPositionSlow(Dir::BACKWARDS) :
-                motor_controller_.GetPosition(Dir::BACKWARDS);
+    void RasterMoveHomeAfterExpo(){
+        SlowStopMotor();
+        pending_move_ = [&]{
+            motor_controller_.MoveToPos(Dir::FORWARD, RUN_OUT_STEPS);
+            pending_move_ = [&]{ RasterMoveHome(true); };
+        };
+//        if(isSignalHigh(GRID_HOME_DETECT)){
+//            ChangeDeviceState(DEVICE_GRID_HOME);
+//            StopMotor();
+//            return;
+//        }
+//        ChangeDeviceState(DEVICE_MOVE_HOME);
+//        motor_controller_.MoveToEndPointSlow(Dir::BACKWARDS);
     }
 
     void ExpRequestedOnHoneGrid(){
@@ -231,7 +240,7 @@ public:
 
     void SetInMotionSigWithDelay(){
         current_tim_task_ = IN_MOTION_SIG_DELAY_TASK;
-        StartTaskTimIT(150);
+        StartTaskTimIT(IN_MOTION_DELAY);
     }
 
     void SetInMotionSig(LOGIC_LEVEL level){
@@ -245,46 +254,53 @@ public:
     }
 
     void ExpositionProcedure(){
-        if(!isSignalHigh(EXP_REQ)){
-            SetInMotionSig(LOW);
-            switch (lastPosition_) {
-                case DEVICE_GRID_HOME:
-                    ChangeDeviceState(DEVICE_GRID_HOME);
-                    if(kShakingScanEnabled_)
-                        RasterMoveHomeAfterExpo();
-                    break;
+        if(isSignalHigh(EXP_REQ)){
+            switch (currentState_) {
+
                 case DEVICE_GRID_IN_FIELD:
-                    ChangeDeviceState(DEVICE_GRID_IN_FIELD);
-                    if(kShakingScanEnabled_)
-                        RasterMoveInFieldAfterExpo();
+                    lastPosition_ = currentState_;
+                    if(!kShakingScanEnabled_){
+                        ChangeDeviceState(DEVICE_SCANNING);
+                        SetInMotionSigWithDelay();
+                    }else
+                        StartShakeExposition();
+                    break;
+
+                case DEVICE_GRID_HOME:
+                    if(!kRasterHomeExpReqIsOk_)
+                        ExpRequestedOnHoneGrid();
+                    else{
+                        lastPosition_ = currentState_;
+                        ChangeDeviceState(DEVICE_SCANNING);
+                        SetInMotionSigWithDelay();
+                    }
+                    break;
+
+                case DEVICE_SHAKE_SCANNING:
+                    if(motor_controller_.GetEvent() == StepperMotor::EVENT_CSS)
+                        SetInMotionSig(HIGH);
                     break;
                 default:
                     break;
             }
-            return;
-        }
-        switch (currentState_) {
-            case DEVICE_GRID_IN_FIELD:
-                lastPosition_ = currentState_;
-                if(!kShakingScanEnabled_){
-                    ChangeDeviceState(DEVICE_SCANNING);
-                    SetInMotionSigWithDelay();
-                }
-                else
-                    StartShakeExposition();
-                break;
+        }else
+            FinishExpoProcedure();
+    }
+
+    void FinishExpoProcedure(){
+        SetInMotionSig(LOW);
+        switch (lastPosition_) {
             case DEVICE_GRID_HOME:
-                if(!kRasterHomeExpReqIsOk_){
-                    ExpRequestedOnHoneGrid();
-                    return;
-                }
-                lastPosition_ = currentState_;
-                SetInMotionSigWithDelay();
-                ChangeDeviceState(DEVICE_SCANNING);
+                if(kShakingScanEnabled_)
+                    RasterMoveHomeAfterExpo();
+                else
+                    ChangeDeviceState(DEVICE_GRID_HOME);
                 break;
-            case DEVICE_SHAKE_SCANNING:
-                if(motor_controller_.GetEvent() == StepperMotor::EVENT_CSS)
-                    SetInMotionSig(HIGH);
+            case DEVICE_GRID_IN_FIELD:
+                if(kShakingScanEnabled_)
+                    RasterMoveInFieldAfterExpo();
+                else
+                    ChangeDeviceState(DEVICE_GRID_IN_FIELD);
                 break;
             default:
                 break;
@@ -331,8 +347,7 @@ private:
     static constexpr int kIN_PIN_CNT = 3;
     std::array<InputPinType, kIN_PIN_CNT> input_pin_container_{
             InputPinType(EXP_REQ_IN_GPIO_Port, EXP_REQ_IN_Pin),
-            InputPinType(GRID_INFIELD_DETECT_GPIO_Port,
-                         GRID_INFIELD_DETECT_Pin),
+            InputPinType(GRID_INFIELD_DETECT_GPIO_Port, GRID_INFIELD_DETECT_Pin),
             InputPinType(GRID_HOME_DETECT_GPIO_Port, GRID_HOME_DETECT_Pin),
     };
     static constexpr int kOUT_PIN_CNT = 3;
@@ -352,12 +367,13 @@ private:
     bool switch_ignore_flag_ {false};
     const bool kRasterHomeExpReqIsOk_ {true};
 
+    std::optional<std::function<void()>> pending_move_;
+
     void ErrorHandler_(BOARD_STATUS_ERROR error){
         StopMotor();
         SetOutputSignal(INDICATION_1, HIGH);
         switch (error) {
             case STANDBY_MOVEMENT_ERROR:
-                break;
             case LIMIT_SWITCH_ERROR:
                 break;
             case EXP_REQ_ERROR:
@@ -366,8 +382,5 @@ private:
                 break;
         }
         Error_Handler();
-        while (true){};
     }
 };
-
-#endif //RASTERDRIVER_MAIN_CONTROLLER_HPP

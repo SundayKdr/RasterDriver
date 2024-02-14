@@ -2,24 +2,30 @@
 #ifndef RASTERDRIVER_APP_CONFIG_HPP
 #define RASTERDRIVER_APP_CONFIG_HPP
 
-#include "StepperMotor/StepperMotorBase.hpp"
+#include "StepperMotor/stepper_motor_base.hpp"
 
-#define TIME_GRID_BTN_LONG_PRESS        1000
-#define TOTAL_DISTANCE_N_OF_STEPS       9000
-#define STEPS_BEFORE_DECCEL             7300
-#define EXPO_DISTANCE_STEPS             300
-#define EXPO_REACH_STEPS                10
-#define STEPS_AFTER_SWITCH              45
+#define mStep                           16
+#define mSTEPS(v)                       int((v) * mStep)
 
-#define CONFIG1_SPEED                   1700
-#define CONFIG2_SPEED                   5100
-#define CONFIG1_ACCELERATION            40
-#define CONFIG2_ACCELERATION            45
+//#define TIME_GRID_BTN_LONG_PRESS      1000
+#define TOTAL_RANGE_STEPS               mSTEPS(562)
+#define STEPS_BEFORE_DECCEL             mSTEPS(456)
+#define EXPO_RANGE_STEPS                mSTEPS(18.75)
+#define EXPO_OFFSET_STEPS               mSTEPS(-9.375)
+#define SWITCH_PRESS_STEPS              mSTEPS(3)
+#define RUN_OUT_STEPS                   mSTEPS(15)
 
-#define SERVICE_MOVE_ACCELERATION       4
-#define SERVICE_MOVE_START_SPEED        500
-#define INIT_MOVE_MAX_SPEED             1500
-#define SERVICE_MOVE_MAX_SPEED          3000
+#define CONFIG1_SPEED                   mSTEPS(107)
+#define CONFIG2_SPEED                   mSTEPS(318.75)
+#define CONFIG1_ACCELERATION            mSTEPS(2.5)
+#define CONFIG2_ACCELERATION            mSTEPS(2.8)
+
+#define SERVICE_MOVE_ACCELERATION       mSTEPS(0.25)
+#define INITIAL_SPEED                   mSTEPS(31.25)
+#define SERVICE_MOVE_MAX_SPEED          mSTEPS(187.5)
+#define INIT_MOVE_MAX_SPEED             mSTEPS(93.75)
+
+#define IN_MOTION_DELAY                 150
 
 //static void FreezeDeviceDelay(uint32_t delay){
 //    uint16_t msDelay = delay * 10 > UINT16_MAX ? UINT16_MAX : delay * 10;
@@ -37,7 +43,7 @@ static StepperMotor::StepperCfg& getBaseConfig(){
             PIN<PinWriteable>{CURRENT_WIND_GPIO_Port, CURRENT_WIND_Pin},
             &htim4,
             TIM_CHANNEL_2,
-            TOTAL_DISTANCE_N_OF_STEPS
+            TOTAL_RANGE_STEPS
     };
     return cfg;
 }
@@ -51,7 +57,7 @@ static StepperMotor::StepperCfg& getDIPConfig(){
         cfg.Vmax = CONFIG2_SPEED;
         cfg.A = CONFIG2_ACCELERATION;
     }
-    cfg.Vmin = SERVICE_MOVE_START_SPEED;
+    cfg.Vmin = INITIAL_SPEED;
     cfg.shake_scan_enabled_ = HAL_GPIO_ReadPin(CONFIG_2_GPIO_Port, CONFIG_2_Pin);
     cfg.directionInverted = HAL_GPIO_ReadPin(CONFIG_3_GPIO_Port, CONFIG_3_Pin);
     return cfg;
@@ -66,8 +72,8 @@ static void StartTaskTimIT(uint16_t delay){
 namespace RB::types{
 
     enum OUTPUT_TYPE{
-        INDICATION_0 = 0,
-        INDICATION_1 = 1,
+        INDICATION_0 = 1,
+        INDICATION_1 = 0,
         IN_MOTION = 2,
     };
 

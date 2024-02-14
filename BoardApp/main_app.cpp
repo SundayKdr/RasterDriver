@@ -58,6 +58,7 @@ extern "C"
     void TIM_IT_clear_(){
         __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim6, TIM_IT_UPDATE);
+        __HAL_TIM_CLEAR_IT(&htim4, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
     }

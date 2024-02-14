@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app_config.hpp"
-#include "StepperMotor/StepperMotorBase.hpp"
+#include "StepperMotor/stepper_motor_base.hpp"
 
 class MotorController : public StepperMotor::StepperMotorBase{
 public:
@@ -14,7 +14,8 @@ public:
         kExpo,
         kService_accel,
         kService_slow,
-        kSwitch_press
+        kSwitch_press,
+        kDecel_and_stop
     };
 
     void UpdateConfig(StepperMotor::StepperCfg& cfg){
@@ -27,33 +28,34 @@ public:
         static MotorController motorController(getDIPConfig());
         return motorController;
     }
+    
     void MoveToPos(StepperMotor::Direction dir, uint32_t steps){
         current_move_mode_ = MoveMode::kService_slow;
-        MakeMotorTask(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, INIT_MOVE_MAX_SPEED,
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, INITIAL_SPEED, INIT_MOVE_MAX_SPEED,
                       dir, steps);
     }
-    void GetPositionSlow(StepperMotor::Direction dir){
+
+    void MoveToEndPointSlow(StepperMotor::Direction dir){
         current_move_mode_ = MoveMode::kService_slow;
-        MakeMotorTask(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, INIT_MOVE_MAX_SPEED,
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, INITIAL_SPEED, INIT_MOVE_MAX_SPEED,
                       dir);
     }
 
-    void GetPosition(StepperMotor::Direction dir){
+    void MoveToEndPointFast(StepperMotor::Direction dir){
         current_move_mode_ = MoveMode::kService_accel;
-        MakeMotorTask(SERVICE_MOVE_ACCELERATION, SERVICE_MOVE_START_SPEED, SERVICE_MOVE_MAX_SPEED,
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, INITIAL_SPEED, SERVICE_MOVE_MAX_SPEED,
                       dir, steps_to_stop_);
     }
 
-    void MakeStepsAfterSwitch(int steps = STEPS_AFTER_SWITCH){
+    void MakeStepsAfterSwitch(){
         current_move_mode_ = MoveMode::kSwitch_press;
-        MakeMotorTask(SERVICE_MOVE_ACCELERATION, 300, 300,
-                      currentDirection_, steps);
+        MakeMotorTask(SERVICE_MOVE_ACCELERATION, INITIAL_SPEED, INITIAL_SPEED,
+                      currentDirection_, SWITCH_PRESS_STEPS);
     }
 
     void Exposition(StepperMotor::Direction dir = StepperMotor::Direction::BACKWARDS){
         current_move_mode_ = MoveMode::kExpo;
-        MakeMotorTask(config_acceleration_, SERVICE_MOVE_START_SPEED, config_Vmax_,
-                   dir, expo_distance_steps_);
+        MakeMotorTask(config_acceleration_, INITIAL_SPEED, config_Vmax_, dir, expo_distance_steps_);
         StepsCorrectionHack();
     }
 
@@ -61,6 +63,11 @@ public:
         if(currentDirection_ == StepperMotor::Direction::BACKWARDS)
             ChangeDirection();
         StepsCorrectionHack();
+    }
+
+    void DecelAndStop(){
+        current_move_mode_ = MoveMode::kDecel_and_stop;
+        mode_ = StepperMotor::DECCEL;
     }
 
     void EndSideStepsCorr(){
@@ -85,6 +92,10 @@ public:
                 break;
             case MoveMode::kService_accel:
                 break;
+            case MoveMode::kDecel_and_stop:
+                if(V_ == Vmin_)
+                    StopMotor();
+                break;
         }
     }
 
@@ -97,8 +108,8 @@ private:
     float config_acceleration_ {SERVICE_MOVE_ACCELERATION};
     float config_Vmax_ {SERVICE_MOVE_MAX_SPEED};
 
-    int reach_steps_ {EXPO_REACH_STEPS};
-    int expo_distance_steps_ {EXPO_DISTANCE_STEPS};
+    int reach_steps_ {EXPO_OFFSET_STEPS};
+    int expo_distance_steps_ {EXPO_RANGE_STEPS};
     int steps_to_stop_ {STEPS_BEFORE_DECCEL};
 
     MoveMode current_move_mode_;

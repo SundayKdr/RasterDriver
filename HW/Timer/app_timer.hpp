@@ -1,7 +1,7 @@
 #pragma once
 
 #include "stm32g4xx_hal.h"
-#include "functional"
+#include <functional>
 
     /**
      * @brief To use:
