@@ -95,6 +95,7 @@ namespace StepperMotor{
             if(motorMoving_){
                 HAL_TIM_PWM_Stop_IT(htim_, timChannel_);
 //                enable_pin_.setValue(HIGH);
+                step_pin_.setValue(LOW);
                 motorMoving_ = false;
                 mode_ = Mode::IDLE;
                 event_ = EVENT_STOP;

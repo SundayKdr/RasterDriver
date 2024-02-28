@@ -15,15 +15,15 @@
 #define SWITCH_PRESS_STEPS              mSTEPS(3)
 #define RUN_OUT_STEPS                   mSTEPS(15)
 
-#define CONFIG1_SPEED                   mSTEPS(107)
-#define CONFIG2_SPEED                   mSTEPS(318.75)
+#define CONFIG1_SPEED                   mSTEPS(120)
+#define CONFIG2_SPEED                   mSTEPS(150)
 #define CONFIG1_ACCELERATION            mSTEPS(2.5)
-#define CONFIG2_ACCELERATION            mSTEPS(2.8)
+#define CONFIG2_ACCELERATION            mSTEPS(2.0)
 
 #define SERVICE_MOVE_ACCELERATION       mSTEPS(0.25)
 #define INITIAL_SPEED                   mSTEPS(31.25)
-#define SERVICE_MOVE_MAX_SPEED          mSTEPS(187.5)
-#define INIT_MOVE_MAX_SPEED             mSTEPS(93.75)
+#define SERVICE_MOVE_MAX_SPEED          mSTEPS(150)
+#define INIT_MOVE_MAX_SPEED             mSTEPS(90)
 
 #define IN_MOTION_DELAY                 150
 

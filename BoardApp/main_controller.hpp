@@ -9,7 +9,6 @@
 #include "IO/PIN.hpp"
 #include "IO/Button.hpp"
 #include "app_config.hpp"
-//#include "Timer/app_timer.hpp"
 
 using namespace RB::types;
 using namespace StepperMotor;
@@ -209,13 +208,6 @@ public:
             motor_controller_.MoveToPos(Dir::BACKWARDS, RUN_OUT_STEPS);
             pending_move_ = [&]{ RasterMoveInField(true); };
         };
-//        if(isSignalHigh(GRID_INFIELD_DETECT)){
-//            ChangeDeviceState(DEVICE_GRID_IN_FIELD);
-//            StopMotor();
-//            return;
-//        }
-//        ChangeDeviceState(DEVICE_MOVE_IN_FIELD);
-//        motor_controller_.MoveToEndPointSlow(Dir::FORWARD);
     }
 
     void RasterMoveHomeAfterExpo(){
@@ -224,13 +216,6 @@ public:
             motor_controller_.MoveToPos(Dir::FORWARD, RUN_OUT_STEPS);
             pending_move_ = [&]{ RasterMoveHome(true); };
         };
-//        if(isSignalHigh(GRID_HOME_DETECT)){
-//            ChangeDeviceState(DEVICE_GRID_HOME);
-//            StopMotor();
-//            return;
-//        }
-//        ChangeDeviceState(DEVICE_MOVE_HOME);
-//        motor_controller_.MoveToEndPointSlow(Dir::BACKWARDS);
     }
 
     void ExpRequestedOnHoneGrid(){
@@ -292,7 +277,7 @@ public:
         switch (lastPosition_) {
             case DEVICE_GRID_HOME:
                 if(kShakingScanEnabled_)
-                    RasterMoveHomeAfterExpo();
+                    RasterMoveHome(true);
                 else
                     ChangeDeviceState(DEVICE_GRID_HOME);
                 break;
@@ -325,24 +310,10 @@ public:
         switch_ignore_flag_ = false;
     }
 
-//    void SysTickTimersTickHandler(){
-//        for(auto & timer : timers_)
-//            timer->TickHandle();
-//    }
-//    void ProcessMessage(){
-//    }
-
 private:
     explicit MainController(MotorController &incomeMotorController)
             :motor_controller_(incomeMotorController)
     {}
-
-//    AppTimer msgReqTim1{[this](){ProcessMessage();}};
-//    AppTimer msgReqTim2{[this](){ProcessMessage();}};
-//    std::array<AppTimer*, 2> timers_{
-//        &msgReqTim1,
-//        &msgReqTim2
-//    };
 
     static constexpr int kIN_PIN_CNT = 3;
     std::array<InputPinType, kIN_PIN_CNT> input_pin_container_{
