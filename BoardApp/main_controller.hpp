@@ -263,7 +263,8 @@ public:
 
                 case DEVICE_SHAKE_SCANNING:
                     if(motor_controller_.GetEvent() == StepperMotor::EVENT_CSS)
-                        SetInMotionSig(HIGH);
+                        if(motor_controller_.GetCurrentDirection() == Dir::FORWARD)
+                            SetInMotionSig(HIGH);
                     break;
                 default:
                     break;

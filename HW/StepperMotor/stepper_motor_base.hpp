@@ -227,8 +227,10 @@ namespace StepperMotor{
 
                 case Mode::CONST:
                 {
-                    if(currentStep_ + accel_step_ >= steps_to_go_)
+                    if(currentStep_ + accel_step_ >= steps_to_go_){
+                        event_ = EVENT_CSE;
                         mode_ = Mode::DECCEL;
+                    }
                 }
                 break;
 
