@@ -225,7 +225,7 @@ public:
 
     void SetInMotionSigWithDelay(){
         current_tim_task_ = IN_MOTION_SIG_DELAY_TASK;
-        StartTaskTimIT(IN_MOTION_DELAY);
+        StartTaskTimIT(IN_MOTION_mSec_DELAY);
     }
 
     void SetInMotionSig(LOGIC_LEVEL level){
@@ -236,6 +236,13 @@ public:
         lastPosition_ = currentState_;
         ChangeDeviceState(DEVICE_SHAKE_SCANNING);
         motor_controller_.Exposition();
+    }
+
+    bool IsInMotionSigReady(){
+        auto dir = motor_controller_.GetCurrentDirection() == StepperMotor::Direction::FORWARD;
+        auto in_mode = motor_controller_.GetMode() == StepperMotor::ACCEL;
+        auto in_time = motor_controller_.GetAccelTimeGap() <= IN_MOTION_uSec_DELAY;
+        return in_mode && in_time && dir;
     }
 
     void ExpositionProcedure(){
@@ -262,9 +269,8 @@ public:
                     break;
 
                 case DEVICE_SHAKE_SCANNING:
-                    if(motor_controller_.GetEvent() == StepperMotor::EVENT_CSS)
-                        if(motor_controller_.GetCurrentDirection() == Dir::FORWARD)
-                            SetInMotionSig(HIGH);
+                    if(IsInMotionSigReady())
+                        SetInMotionSig(HIGH);
                     break;
                 default:
                     break;

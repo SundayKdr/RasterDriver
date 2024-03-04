@@ -6,10 +6,16 @@
 #include "IO/PIN.hpp"
 
 #include "stm32g4xx_hal_tim.h"
+#include "app_config.hpp"
 
 using namespace pin_impl;
 
 namespace StepperMotor{
+    enum AccelType{
+        kLinear,
+        kConstantPower,
+        kParabolic
+    };
 
     struct StepperCfg
     {
@@ -22,9 +28,11 @@ namespace StepperMotor{
         uint32_t criticalNofSteps {};
         bool directionInverted {};
         bool shake_scan_enabled_ {};
-        float A {};
-        float Vmax {};
-        float Vmin {};
+        uint32_t A {};
+        uint32_t ramp_time{};
+        uint32_t Vmax {};
+        uint32_t Vmin {};
+        AccelType accel_type{};
     };
 
     enum MOTOR_EVENT {
@@ -74,16 +82,17 @@ namespace StepperMotor{
         }
 
         virtual void AppCorrection() = 0;
+        virtual void AccelerationImpl() = 0;
+        virtual void CalcBeforeStartImpl() = 0;
 
-        void MakeMotorTask(float acceleration,
-                           float start_speed,
-                           float max_speed,
+        void MakeMotorTask(uint32_t start_speed,
+                           uint32_t max_speed,
                            Direction dir = currentDirection_,
                            uint32_t steps = kCriticalNofSteps_)
         {
+            CalcBeforeStartImpl();
             if(motorMoving_)
                 StopMotor();
-            A_ = acceleration;
             Vmin_ = start_speed;
             Vmax_ = max_speed;
             V_ = start_speed;
@@ -109,6 +118,7 @@ namespace StepperMotor{
             CalcRegValue_();
             currentStep_ = 0;
             accel_step_ = 0;
+            uSec_accel_ = 0;
         }
 
         [[nodiscard]] bool IsMotorMoving() const {
@@ -126,6 +136,7 @@ namespace StepperMotor{
         [[nodiscard]] Direction GetCurrentDirection() const {
             return currentDirection_;
         }
+
     protected:
         StepperMotorBase() = delete;
         explicit StepperMotorBase(StepperMotor::StepperCfg& cfg)
@@ -135,13 +146,12 @@ namespace StepperMotor{
              current_pin_(cfg.current_pin),
              timChannel_(cfg.timChannel),
              htim_(cfg.htim),
-             A_(cfg.A),
              Vmax_(cfg.Vmax),
              Vmin_(cfg.Vmin),
              directionInverted_(cfg.directionInverted)
         {
             kCriticalNofSteps_ = cfg.criticalNofSteps;
-            timerDividend_ = SystemCoreClock / (cfg.htim->Instance->PSC);
+            timer_tick_Hz_ = SystemCoreClock / (cfg.htim->Instance->PSC);
         };
 
         MOTOR_IOS step_pin_;
@@ -151,7 +161,7 @@ namespace StepperMotor{
 
         TIM_HandleTypeDef *htim_;
         uint32_t timChannel_;
-        uint32_t timerDividend_;
+        uint32_t timer_tick_Hz_;
 
         inline static uint32_t kCriticalNofSteps_ {0};
         int steps_to_go_ {0};
@@ -159,10 +169,11 @@ namespace StepperMotor{
         int currentStep_ {0};
         int accel_step_ {0};
 
-        float A_ {0.0f};
-        float V_ {0.0f};
-        float Vmin_ {0.0f};
-        float Vmax_ {0.0f};
+        uint32_t V_ {0};
+        uint32_t Vmin_ {0};
+        uint32_t Vmax_ {0};
+
+        uint32_t uSec_accel_ {0};
 
         inline static Direction currentDirection_ {Direction::FORWARD};
         Mode mode_ {Mode::IDLE};
@@ -174,6 +185,7 @@ namespace StepperMotor{
         void StartMotor_(uint32_t steps){
             if(!motorMoving_){
                 accel_step_ = 0;
+                uSec_accel_ = 0;
                 currentStep_ = 0;
                 mode_ = Mode::ACCEL;
                 motorMoving_ = true;
@@ -186,7 +198,7 @@ namespace StepperMotor{
 
         void CalcRegValue_(){
             if(V_ > 0){
-                uint32_t buf = timerDividend_ / uint32_t(V_);
+                uint32_t buf = timer_tick_Hz_ / V_;
                 if(buf > 0 && buf < UINT16_MAX){
                     __HAL_TIM_SET_AUTORELOAD(htim_, buf);
                     __HAL_TIM_SET_COMPARE(htim_, timChannel_,buf/2);
@@ -214,7 +226,7 @@ namespace StepperMotor{
                         event_ = EVENT_CSS;
                         mode_ = Mode::CONST;
                     }else
-                        V_ += A_;
+                        AccelerationImpl();
 
                     if (accel_step_ >= steps_to_go_ / 2)
                     {
@@ -222,6 +234,7 @@ namespace StepperMotor{
                         break;
                     }
                     accel_step_++;
+                    uSec_accel_ += timer_tick_Hz_ / V_;
                 }
                 break;
 
@@ -237,9 +250,10 @@ namespace StepperMotor{
                 case Mode::DECCEL:
                 {
                     if(accel_step_ > 0){
-                        V_ -= A_;
+                        AccelerationImpl();
                         if (V_ < Vmin_) V_ = Vmin_;
                         accel_step_--;
+                        uSec_accel_ -= timer_tick_Hz_ / V_;
                     }
                 }
                 break;

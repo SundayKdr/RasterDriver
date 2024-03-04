@@ -15,17 +15,23 @@
 #define SWITCH_PRESS_STEPS              mSTEPS(3)
 #define RUN_OUT_STEPS                   mSTEPS(15)
 
-#define CONFIG1_SPEED                   mSTEPS(120)
-#define CONFIG2_SPEED                   mSTEPS(150)
+#define INITIAL_SPEED                   mSTEPS(31.25)
+#define CONFIG1_MAX_SPEED               mSTEPS(120)
+#define CONFIG2_MAX_SPEED               mSTEPS(150)
 #define CONFIG1_ACCELERATION            mSTEPS(2.5)
 #define CONFIG2_ACCELERATION            mSTEPS(2.0)
+#define CONFIG1_RAMP_TIME               52'000
+#define CONFIG2_RAMP_TIME               40'000
 
 #define SERVICE_MOVE_ACCELERATION       mSTEPS(0.25)
-#define INITIAL_SPEED                   mSTEPS(31.25)
 #define SERVICE_MOVE_MAX_SPEED          mSTEPS(150)
 #define INIT_MOVE_MAX_SPEED             mSTEPS(90)
 
-#define IN_MOTION_DELAY                 150
+#define ACCEL_TYPE                      AccelType::kParabolic  \
+                                        //AccelType::kLinear AccelType::kParabolic AccelType::kConstantPower
+
+#define IN_MOTION_uSec_DELAY            1'000
+#define IN_MOTION_mSec_DELAY            (IN_MOTION_uSec_DELAY / 1000)
 
 //static void FreezeDeviceDelay(uint32_t delay){
 //    uint16_t msDelay = delay * 10 > UINT16_MAX ? UINT16_MAX : delay * 10;
@@ -51,20 +57,25 @@ static StepperMotor::StepperCfg& getBaseConfig(){
 static StepperMotor::StepperCfg& getDIPConfig(){
     auto& cfg = getBaseConfig();
     if(HAL_GPIO_ReadPin(CONFIG_1_GPIO_Port, CONFIG_1_Pin)){
-        cfg.Vmax = CONFIG1_SPEED;
+        cfg.Vmax = CONFIG1_MAX_SPEED;
         cfg.A = CONFIG1_ACCELERATION;
+        cfg.ramp_time = CONFIG1_RAMP_TIME;
     }else{
-        cfg.Vmax = CONFIG2_SPEED;
+        cfg.Vmax = CONFIG2_MAX_SPEED;
         cfg.A = CONFIG2_ACCELERATION;
+        cfg.ramp_time = CONFIG2_RAMP_TIME;
     }
     cfg.Vmin = INITIAL_SPEED;
     cfg.shake_scan_enabled_ = HAL_GPIO_ReadPin(CONFIG_2_GPIO_Port, CONFIG_2_Pin);
-    cfg.directionInverted = HAL_GPIO_ReadPin(CONFIG_3_GPIO_Port, CONFIG_3_Pin);
+
+    HAL_GPIO_ReadPin(CONFIG_3_GPIO_Port, CONFIG_3_Pin) ? cfg.accel_type = StepperMotor::AccelType::kParabolic
+                                                            : cfg.accel_type = StepperMotor::AccelType::kConstantPower;
+
     return cfg;
 }
 
 static void StartTaskTimIT(uint16_t delay){
-    uint16_t msDelay = delay * 10 > UINT16_MAX ? UINT16_MAX : delay * 10;
+    uint16_t msDelay = delay > UINT16_MAX ? UINT16_MAX : delay;
     __HAL_TIM_SET_AUTORELOAD(&htim6, msDelay);
     HAL_TIM_Base_Start_IT(&htim6);
 }
