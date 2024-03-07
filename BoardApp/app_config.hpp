@@ -8,29 +8,31 @@
 #define mSTEPS(v)                       int((v) * mStep)
 
 //#define TIME_GRID_BTN_LONG_PRESS      1000
-#define TOTAL_RANGE_STEPS               mSTEPS(562)
-#define STEPS_BEFORE_DECCEL             mSTEPS(456)
-#define EXPO_RANGE_STEPS                mSTEPS(18.75)
-#define EXPO_OFFSET_STEPS               mSTEPS(-9.375)
-#define SWITCH_PRESS_STEPS              mSTEPS(3)
-#define RUN_OUT_STEPS                   mSTEPS(15)
+#define TOTAL_RANGE_STEPS               mSTEPS(562)     //total steps before abnormal error stop (switch is missing)
+#define STEPS_BEFORE_DECCEL             mSTEPS(456)     //steps before deceleration in max long rage move (from edge to edge)
+#define EXPO_RANGE_STEPS                mSTEPS(18.75)   //steps in expo move before changing direction
+#define EXPO_OFFSET_STEPS               mSTEPS(-9.375)  //steps to run inside park zone (to center expo move)
+#define SWITCH_PRESS_STEPS              mSTEPS(3)       //steps to run inside park zone on end of move (ensure not to lose switch while bouncing etc.)
+#define RUN_OUT_STEPS                   mSTEPS(15)      //steps running out of the parking zone and returning for correct parking
 
-#define INITIAL_SPEED                   mSTEPS(31.25)
-#define CONFIG1_MAX_SPEED               mSTEPS(120)
+#define INITIAL_SPEED                   mSTEPS(31.25)   //start speed at every move
+#define CONFIG1_MAX_SPEED               mSTEPS(120)     //max speed in acceleration moves
 #define CONFIG2_MAX_SPEED               mSTEPS(150)
-#define CONFIG1_ACCELERATION            mSTEPS(2.5)
-#define CONFIG2_ACCELERATION            mSTEPS(2.0)
-#define CONFIG1_RAMP_TIME               52'000
-#define CONFIG2_RAMP_TIME               40'000
+#define CONFIG1_RAMP_TIME               48'000          //time in uSec for acceleration phase (from start to max speed)
+#define CONFIG2_RAMP_TIME               38'000
+#define CONFIG1_ACCELERATION            mSTEPS(2.5)     //acceleration only for kParabolic
+#define CONFIG2_ACCELERATION            mSTEPS(2.0)     //acceleration only for kParabolic
 
-#define SERVICE_MOVE_ACCELERATION       mSTEPS(0.25)
 #define SERVICE_MOVE_MAX_SPEED          mSTEPS(150)
 #define INIT_MOVE_MAX_SPEED             mSTEPS(90)
 
-#define ACCEL_TYPE                      AccelType::kParabolic  \
-                                        //AccelType::kLinear AccelType::kParabolic AccelType::kConstantPower
+#define ACCEL_TYPE                      \
+                                      AccelType::kParabolic
+//                                      AccelType::kLinear
+//                                      AccelType::kConstantPower
+//                                      AccelType::kSigmoid
 
-#define IN_MOTION_uSec_DELAY            1'000
+#define IN_MOTION_uSec_DELAY            1'000           //time gap in uSec before accel phase end (to set out IN_MOTION sig)
 #define IN_MOTION_mSec_DELAY            (IN_MOTION_uSec_DELAY / 1000)
 
 //static void FreezeDeviceDelay(uint32_t delay){

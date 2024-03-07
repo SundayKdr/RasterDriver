@@ -24,10 +24,13 @@ public:
 
     void UpdateConfig(StepperMotor::StepperCfg& cfg){
         directionInverted_ = cfg.directionInverted;
-        config_acceleration_ = cfg.A;
-        config_Vmax_ = cfg.Vmax;
-        uSec_ramp_time_ = cfg.ramp_time;
+        A_ = cfg.A;
         accel_type_ = cfg.accel_type;
+        if(cfg.ramp_time != T_ || cfg.Vmax != config_Vmax_){
+            config_Vmax_ = cfg.Vmax;
+            T_ = cfg.ramp_time;
+            ReCalcKFactors();
+        }
     }
 
     static MotorController& GetRef(){
@@ -86,19 +89,44 @@ public:
     }
 
     uint32_t GetAccelTimeGap(){
-        return uSec_ramp_time_ - uSec_accel_;
+        return T_ - uSec_accel_;
     }
 
 private:
     MotorController() = delete;
     MotorController(StepperMotor::StepperCfg& cfg)
         : StepperMotor::StepperMotorBase(cfg)
-    {}
+    {
+        ReCalcKFactors();
+    }
 
-    uint32_t uSec_ramp_time_{0};
+    struct{
+        float k1 {1};
+        float k2 {1};
+        float y_offset {1};
+        int x_offset {1};
+        const uint8_t k3  {2};       //move sigmoid center (k3=2) from y_axis (0<k3<2) to y_axis (2<k3<8)
 
-    float k_ {0};
-    uint32_t config_acceleration_ {SERVICE_MOVE_ACCELERATION};
+        float core_f(int x) const{
+            return x / (k2 + std::abs(x));
+        }
+        void KCalc(uint32_t tTotal, float Vmax, float Vmin){
+            x_offset = tTotal / k3;
+            k2 = x_offset * (1 / ( 1 - (Vmin / (Vmax/2))) - 1);
+            k1 = 1 / (core_f(tTotal - x_offset) + 1);
+            k2 = x_offset * (1 / ( 1 - (Vmin / (Vmax * k1))) - 1);
+            k1 = 1 / (core_f(tTotal - x_offset) + 1);
+            y_offset = k1 * Vmax;
+        }
+        uint32_t VCalc(uint32_t uSec){
+            return y_offset * core_f(uSec - x_offset) + y_offset;
+        }
+    }sigmoid_;
+
+    float k_ {1};
+
+    uint32_t T_ {CONFIG1_RAMP_TIME};
+    uint32_t A_ {1};
     uint32_t config_Vmax_ {SERVICE_MOVE_MAX_SPEED};
 
     int reach_steps_ {EXPO_OFFSET_STEPS};
@@ -108,33 +136,35 @@ private:
     MoveMode current_move_mode_;
     AccelType accel_type_ = ACCEL_TYPE;
 
-    void CalcBeforeStartImpl() override{
-        k_ = static_cast<float>(Vmax_ - Vmin_) / uSec_ramp_time_;
-    }
-
-    void AccelerationImpl() override{
-        if(accel_type_ == AccelType::kLinear)
-            KAcceleration(static_cast<float >(uSec_accel_));
-
-        else if(accel_type_ == AccelType::kParabolic)
-            ParabolicAcceleration();
-
-        else if(accel_type_ == AccelType::kConstantPower){
-//            auto x = static_cast<float>(std::sqrt(uSec_accel_));
-            auto x = sqrtf(uSec_accel_);
-            KAcceleration(x);
+    void ReCalcKFactors(){
+        switch (accel_type_) {
+            case kLinear:
+                k_ = static_cast<float>(config_Vmax_ - Vmin_) / T_;
+                break;
+            case kConstantPower:
+                k_ = (config_Vmax_ - Vmin_) / sqrtf(T_);
+                break;
+            case kParabolic:
+                break;
+            case kSigmoid:
+                sigmoid_.KCalc(T_, static_cast<float>(config_Vmax_), static_cast<float>(Vmin_));
+                break;
         }
     }
 
-    void KAcceleration(float x){
-        switch (mode_){
-            case Mode::ACCEL:
-                V_ = static_cast<uint32_t>(k_ * x) + Vmin_;
+    void AccelerationImpl(){
+        switch (accel_type_){
+            case kLinear:
+                V_ = static_cast<uint32_t>(k_ * uSec_accel_) + Vmin_;
                 break;
-            case Mode::DECCEL:
-                V_ = static_cast<uint32_t>((-k_) * x) + Vmax_;
+            case kConstantPower:
+                V_ = static_cast<uint32_t>(k_ * sqrtf(uSec_accel_)) + Vmin_;
                 break;
-            default:
+            case kSigmoid:
+                V_ = sigmoid_.VCalc(uSec_accel_);
+                break;
+            case kParabolic:
+                ParabolicAcceleration();
                 break;
         }
     }
@@ -142,11 +172,11 @@ private:
     void ParabolicAcceleration(){
         switch (mode_){
             case Mode::ACCEL:
-                V_ += config_acceleration_;
+                V_ += A_;
                 break;
 
             case Mode::DECCEL:
-                V_ -= config_acceleration_;
+                V_ -= A_;
                 break;
             default:
                 break;

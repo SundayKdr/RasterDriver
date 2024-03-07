@@ -14,7 +14,8 @@ namespace StepperMotor{
     enum AccelType{
         kLinear,
         kConstantPower,
-        kParabolic
+        kParabolic,
+        kSigmoid
     };
 
     struct StepperCfg
@@ -83,14 +84,12 @@ namespace StepperMotor{
 
         virtual void AppCorrection() = 0;
         virtual void AccelerationImpl() = 0;
-        virtual void CalcBeforeStartImpl() = 0;
 
         void MakeMotorTask(uint32_t start_speed,
                            uint32_t max_speed,
                            Direction dir = currentDirection_,
                            uint32_t steps = kCriticalNofSteps_)
         {
-            CalcBeforeStartImpl();
             if(motorMoving_)
                 StopMotor();
             Vmin_ = start_speed;
@@ -165,7 +164,6 @@ namespace StepperMotor{
 
         inline static uint32_t kCriticalNofSteps_ {0};
         int steps_to_go_ {0};
-
         int currentStep_ {0};
         int accel_step_ {0};
 
