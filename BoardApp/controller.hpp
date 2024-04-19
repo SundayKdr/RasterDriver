@@ -4,15 +4,15 @@
 #include <optional>
 #include <functional>
 
-#include "motor_impl.hpp"
+#include "grid_motor.hpp"
 
-#include "IO/PIN.hpp"
-#include "IO/Button.hpp"
+#include "embedded_hw_utils/IO/pin.hpp"
+#include "embedded_hw_utils/IO/button.hpp"
 #include "app_config.hpp"
 
 using namespace RB::types;
 using namespace StepperMotor;
-using namespace pin_impl;
+using namespace PIN_BOARD;
 
 class MainController {
     using InputPinType = PIN<PinReadable>;
@@ -32,8 +32,8 @@ public:
     }
 
     void UpdateConfig(){
-        auto config = getDIPConfig();
-        kShakingScanEnabled_ = config.shake_scan_enabled_;
+        auto& config = getDIPConfig();
+        kShakingScanEnabled_ = config.shake_scan_enabled;
         motor_controller_.UpdateConfig(config);
     }
 
@@ -46,7 +46,15 @@ public:
     void BoardInit(){
         UpdateConfig();
         InvertPins();
-        InitialMove();
+        if (test_btn.getState()) TestMove();
+        else InitialMove();
+    }
+
+    void TestMove(){
+        motor_controller_.MoveToPos(Dir::BACKWARDS, mSTEPS(7));
+        pending_move_ = [&]{
+            motor_controller_.MoveToPos(Dir::FORWARD, mSTEPS(7));
+        };
     }
 
     void InitialMove(){
@@ -65,7 +73,7 @@ public:
    }
 
     bool isSignalHigh(INPUT_TYPE pin){
-        return static_cast<bool>(input_pin_container_[pin].getValue());
+        return static_cast<bool>(input_pin_container_[pin].getState());
     }
 
     void ChangeDeviceState(BOARD_STATUS new_status){
@@ -334,6 +342,7 @@ private:
             OutputPinType(INDICATION_1_OUT_GPIO_Port, INDICATION_1_OUT_Pin),
             OutputPinType(IN_MOTION_OUT_GPIO_Port, IN_MOTION_OUT_Pin)
     };
+    InputPinType test_btn {NOTUSED_PUSHBUTTON_GPIO_Port, NOTUSED_PUSHBUTTON_Pin};
 
     MotorController& motor_controller_;
     TIM_TASKS current_tim_task_ {NO_TASKS};

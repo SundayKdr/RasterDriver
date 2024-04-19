@@ -2,7 +2,7 @@
 #ifndef RASTERDRIVER_APP_CONFIG_HPP
 #define RASTERDRIVER_APP_CONFIG_HPP
 
-#include "StepperMotor/stepper_motor_base.hpp"
+#include "embedded_hw_utils/StepperMotor/accel_motor.hpp"
 
 #define mStep                           16
 #define mSTEPS(v)                       int((v) * mStep)
@@ -27,10 +27,10 @@
 #define INIT_MOVE_MAX_SPEED             mSTEPS(90)
 
 #define ACCEL_TYPE                      \
-                                      AccelType::kParabolic
-//                                      AccelType::kLinear
-//                                      AccelType::kConstantPower
-//                                      AccelType::kSigmoid
+                                      MotorSpecial::AccelType::kParabolic
+//                                      MotorSpecial::AccelType::kLinear
+//                                      MotorSpecial::AccelType::kConstantPower
+//                                      MotorSpecial::AccelType::kSigmoid
 
 #define IN_MOTION_uSec_DELAY            1'000           //time gap in uSec before accel phase end (to set out IN_MOTION sig)
 #define IN_MOTION_mSec_DELAY            (IN_MOTION_uSec_DELAY / 1000)
@@ -43,35 +43,49 @@
 //    __enable_irq ();
 //}
 
-static StepperMotor::StepperCfg& getBaseConfig(){
-    static StepperMotor::StepperCfg cfg{
+struct AppCfg{
+    MotorSpecial::AccelCfg accelCfg;
+    bool shake_scan_enabled {false};
+    bool direction_inverted {false};
+};
+
+static AppCfg getBaseConfig(){
+    static StepperMotor::StepperCfg s_cfg{
             PIN<PinWriteable>{STEP_GPIO_Port, STEP_Pin},
             PIN<PinWriteable>{DIR_GPIO_Port, DIR_Pin},
             PIN<PinWriteable>{ENABLE_GPIO_Port, ENABLE_Pin},
-            PIN<PinWriteable>{CURRENT_WIND_GPIO_Port, CURRENT_WIND_Pin},
             &htim4,
             TIM_CHANNEL_2,
             TOTAL_RANGE_STEPS
     };
-    return cfg;
+    static MotorSpecial::AccelCfg a_cfg{
+            CONFIG1_RAMP_TIME,
+            ACCEL_TYPE,
+            CONFIG1_ACCELERATION,
+            CONFIG1_MAX_SPEED,
+            INITIAL_SPEED,
+            s_cfg
+    };
+    static AppCfg appCfg {a_cfg};
+    return appCfg;
 }
 
-static StepperMotor::StepperCfg& getDIPConfig(){
-    auto& cfg = getBaseConfig();
+static AppCfg& getDIPConfig(){
+    static auto cfg = getBaseConfig();
     if(HAL_GPIO_ReadPin(CONFIG_1_GPIO_Port, CONFIG_1_Pin)){
-        cfg.Vmax = CONFIG1_MAX_SPEED;
-        cfg.A = CONFIG1_ACCELERATION;
-        cfg.ramp_time = CONFIG1_RAMP_TIME;
+        cfg.accelCfg.Vmax = CONFIG1_MAX_SPEED;
+        cfg.accelCfg.A = CONFIG1_ACCELERATION;
+        cfg.accelCfg.ramp_time = CONFIG1_RAMP_TIME;
     }else{
-        cfg.Vmax = CONFIG2_MAX_SPEED;
-        cfg.A = CONFIG2_ACCELERATION;
-        cfg.ramp_time = CONFIG2_RAMP_TIME;
+        cfg.accelCfg.Vmax = CONFIG2_MAX_SPEED;
+        cfg.accelCfg.A = CONFIG2_ACCELERATION;
+        cfg.accelCfg.ramp_time = CONFIG2_RAMP_TIME;
     }
-    cfg.Vmin = INITIAL_SPEED;
-    cfg.shake_scan_enabled_ = HAL_GPIO_ReadPin(CONFIG_2_GPIO_Port, CONFIG_2_Pin);
+    cfg.accelCfg.Vmin = INITIAL_SPEED;
+    cfg.shake_scan_enabled = HAL_GPIO_ReadPin(CONFIG_2_GPIO_Port, CONFIG_2_Pin);
 
-    HAL_GPIO_ReadPin(CONFIG_3_GPIO_Port, CONFIG_3_Pin) ? cfg.accel_type = StepperMotor::AccelType::kParabolic
-                                                            : cfg.accel_type = StepperMotor::AccelType::kConstantPower;
+    HAL_GPIO_ReadPin(CONFIG_3_GPIO_Port, CONFIG_3_Pin) ? cfg.accelCfg.accel_type = MotorSpecial::AccelType::kParabolic
+                                                            : cfg.accelCfg.accel_type = MotorSpecial::AccelType::kConstantPower;
 
     return cfg;
 }

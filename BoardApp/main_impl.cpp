@@ -1,8 +1,7 @@
 #include "main.h"
 #include "tim.h"
 #include "iwdg.h"
-#include "main_controller.hpp"
-#include "app_config.hpp"
+#include "controller.hpp"
 
 extern "C"
 {
