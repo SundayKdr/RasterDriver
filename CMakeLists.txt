@@ -21,7 +21,7 @@ include(cmake/utils.cmake)
 
 include_directories(
         BoardApp
-        HW
+        Libs
 )
 
 add_subdirectory(Drivers)
@@ -29,7 +29,7 @@ add_subdirectory(Drivers)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/Core/*.*
         ${CMAKE_CURRENT_SOURCE_DIR}/BoardApp/*.*
-        ${CMAKE_CURRENT_SOURCE_DIR}/HW/*.*
+        ${CMAKE_CURRENT_SOURCE_DIR}/Libs/*.*
         )
 
 add_executable(${PROJECT_NAME} startup_stm32g431xx.s Core/src/main.c)
@@ -44,7 +44,7 @@ target_include_directories(${PROJECT_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/Core"
         "${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc"
         "${CMAKE_CURRENT_SOURCE_DIR}/BoardApp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/HW"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Libs"
         )
 
 target_sources(${PROJECT_NAME}
