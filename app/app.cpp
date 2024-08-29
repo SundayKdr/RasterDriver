@@ -1,3 +1,5 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include "main.h"
 #include "tim.h"
 #include "iwdg.h"
@@ -7,44 +9,40 @@ extern "C"
 {
 //    void HAL_IncTick() {
 //        uwTick += uwTickFreq;
-//        MainController::GetRef().SysTickTimersTickHandler();
+//        MainController::global().SysTickTimersTickHandler();
 //    }
-
-    Button btn_grid_ = Button(GRID_BUTTON_GPIO_Port, GRID_BUTTON_Pin);
 
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM1){
             HAL_IWDG_Refresh(&hiwdg);
-            MainController::GetRef().BoardUpdate();
+            MainController::global().BoardUpdate();
         }
         if(htim->Instance == TIM3){
-            MainController::GetRef().UpdateConfig();
+            MainController::global().UpdateConfig();
         }
         if(htim->Instance == TIM6){
             HAL_TIM_Base_Stop_IT(htim);
-            MainController::GetRef().TimTaskHandler();
+            MainController::global().TimTaskHandler();
         }
         if(htim->Instance == TIM7){
             HAL_TIM_Base_Stop_IT(&htim7);
-            MainController::GetRef().BtnEventHandle(btn_grid_);
+            MainController::global().BtnEventHandle();
         }
     }
 
     void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM4){
-            MotorController::GetRef().MotorRefresh();
+            MotorController::global().MotorRefresh();
         }
     }
 
     void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     {
-//        if(GPIO_Pin == btn_grid_){
-//            MainController::GetRef().BtnEventHandle(btn_grid_);
-//        }
-        if(GPIO_Pin == btn_grid_){
-            btn_grid_.getState() ? HAL_TIM_Base_Start_IT(&htim7) : HAL_TIM_Base_Stop_IT(&htim7);
+        if(GPIO_Pin == GRID_BUTTON_Pin){
+            HAL_GPIO_ReadPin(GRID_BUTTON_GPIO_Port, GRID_BUTTON_Pin) ? HAL_TIM_Base_Start_IT(&htim7)
+                                                                     : HAL_TIM_Base_Stop_IT(&htim7);
         }
     }
 
@@ -62,12 +60,17 @@ extern "C"
         __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
     }
 
+    void EnableTimFreezeInBreakpoint(){
+        __HAL_DBGMCU_FREEZE_TIM4();
+    }
+
     void AppInit(){
+        EnableTimFreezeInBreakpoint();
         EXTI_clear_enable();
         TIM_IT_clear_();
         HAL_TIM_Base_Start_IT(&htim1);
         HAL_TIM_Base_Start_IT(&htim3);
-        MainController::GetRef().BoardInit();
+        MainController::global().BoardInit();
     }
 
     void AppLoop()

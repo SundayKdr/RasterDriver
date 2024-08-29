@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app_config.hpp"
-#include "embedded_hw_utils/StepperMotor/accel_motor.hpp"
+#include "embedded_hw_utils/motors/stepper_motor/accel_motor.hpp"
 
 #include <cmath>
 
@@ -9,6 +9,7 @@ using namespace MotorSpecial;
 
 class MotorController : public AccelMotor{
 public:
+    MotorController() = delete;
     const MotorController& operator=(const MotorController &) = delete;
     MotorController& operator=(MotorController &) = delete;
     MotorController(MotorController&) = delete;
@@ -23,67 +24,66 @@ public:
     };
 
     void UpdateConfig(AppCfg& cfg){
-        directionInverted_ = cfg.direction_inverted;
+        SetDirInversion(cfg.direction_inverted);
         AccelMotor::UpdateConfig(cfg.accelCfg);
     }
 
-    static MotorController& GetRef(){
+    static MotorController& global(){
         static MotorController motorController(getDIPConfig());
         return motorController;
     }
     
     void MoveToPos(StepperMotor::Direction dir, uint32_t steps){
-        current_move_mode_ = MoveMode::kService_slow;
+        current_state_ = MoveMode::kService_slow;
         MakeMotorTask(INITIAL_SPEED, INIT_MOVE_MAX_SPEED,
                       dir, steps);
     }
 
     void MoveToEndPointSlow(StepperMotor::Direction dir){
-        current_move_mode_ = MoveMode::kService_slow;
+        current_state_ = MoveMode::kService_slow;
         MakeMotorTask(INITIAL_SPEED, INIT_MOVE_MAX_SPEED,
-                      dir);
+                      dir, GetTotalRangeSteps());
     }
 
     void MoveToEndPointFast(StepperMotor::Direction dir){
-        current_move_mode_ = MoveMode::kService_accel;
+        current_state_ = MoveMode::kService_accel;
         MakeMotorTask(INITIAL_SPEED, SERVICE_MOVE_MAX_SPEED,
                       dir, STEPS_BEFORE_DECCEL);
     }
 
     void MakeStepsAfterSwitch(){
-        current_move_mode_ = MoveMode::kSwitch_press;
+        current_state_ = MoveMode::kSwitch_press;
         MakeMotorTask(INITIAL_SPEED, INITIAL_SPEED,
-                      currentDirection_, SWITCH_PRESS_STEPS);
+                      CurrentDirection(), SWITCH_PRESS_STEPS);
     }
 
     void Exposition(StepperMotor::Direction dir = StepperMotor::Direction::BACKWARDS){
-        current_move_mode_ = MoveMode::kExpo;
+        current_state_ = MoveMode::kExpo;
         MakeMotorTask(INITIAL_SPEED, config_Vmax_, dir, expo_distance_steps_);
         StepsCorrectionHack();
     }
 
     void ChangeDirAbnormalExpo(){
-        if(currentDirection_ == StepperMotor::Direction::BACKWARDS)
+        if(CurrentDirection() == StepperMotor::Direction::BACKWARDS)
             ChangeDirection();
         StepsCorrectionHack();
     }
 
-    void DecelAndStop(){
-        current_move_mode_ = MoveMode::kDecel_and_stop;
-        mode_ = StepperMotor::DECCEL;
+    void SlowDownAndStop(){
+        current_state_ = MoveMode::kDecel_and_stop;
+        SetMode(StepperMotor::DECCEL);
     }
 
     void EndSideStepsCorr(){
-        steps_to_go_ -= reach_steps_;
+        CorrectStepsToGo(-reach_steps_);
         ChangeDirection();
     }
 
     void StepsCorrectionHack(){
-        currentStep_ -= reach_steps_;
+        CorrectCurrentStep(reach_steps_);
     }
 
 private:
-    MotorController() = delete;
     MotorController(AppCfg& cfg)
         :AccelMotor(cfg.accelCfg)
     {
@@ -93,23 +93,25 @@ private:
     int reach_steps_ {EXPO_OFFSET_STEPS};
     int expo_distance_steps_ {EXPO_RANGE_STEPS};
 
-    MoveMode current_move_mode_;
+    MoveMode current_state_;
 
     void AppCorrection() override{
-        switch (current_move_mode_){
+        auto steps_to_go = static_cast<int>(StepsToGo());
+        auto current_step = static_cast<int>(CurrentStep());
+        switch (current_state_){
             case MoveMode::kExpo:
-                if(currentStep_ >= steps_to_go_)
+                if(current_step >= steps_to_go)
                     ChangeDirection();
                 break;
             case MoveMode::kService_slow:
             case MoveMode::kSwitch_press:
-                if(currentStep_ >= steps_to_go_)
+                if(current_step >= steps_to_go)
                     StopMotor();
                 break;
             case MoveMode::kService_accel:
                 break;
             case MoveMode::kDecel_and_stop:
-                if(V_ == Vmin_)
+                if(V_ == CurrentMinSpeed())
                     StopMotor();
                 break;
         }

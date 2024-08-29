@@ -1,31 +1,28 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(TARGET_CPU "cortex-m4")
-
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR ${TARGET_CPU})
 
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
-set(CMAKE_C_COMPILER   arm-none-eabi-gcc)
-set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
-set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
-set(CMAKE_SIZE_UTIL    arm-none-eabi-size)
+set(CMAKE_C_COMPILER        arm-none-eabi-gcc)
+set(CMAKE_CXX_COMPILER      arm-none-eabi-g++)
+set(CMAKE_ASM_COMPILER      arm-none-eabi-gcc)
+set(CMAKE_SIZE_UTIL         arm-none-eabi-size)
 
-set(COMMON_FLAGS "-mthumb -mcpu=${TARGET_CPU}")
-set(C_CXX_FLAGS  "-specs=nano.specs -specs=nosys.specs -ffunction-sections -fdata-sections -ffreestanding")
-set(CXX_FLAGS    "-fno-exceptions -fno-rtti -fno-threadsafe-statics")
+set(COMMON_FLAGS            "-mthumb -mcpu=${TARGET_CPU}")
+set(C_CXX_FLAGS             "-specs=nano.specs -specs=nosys.specs -ffunction-sections -fdata-sections -ffreestanding")
+set(CXX_FLAGS               "-fno-exceptions -fno-rtti -fno-threadsafe-statics -fcoroutines")
 
-set(CMAKE_C_FLAGS_INIT          "${COMMON_FLAGS} ${C_CXX_FLAGS}"              CACHE STRING "" FORCE)
-set(CMAKE_CXX_FLAGS_INIT        "${COMMON_FLAGS} ${C_CXX_FLAGS} ${CXX_FLAGS}" CACHE STRING "" FORCE)
-set(CMAKE_ASM_FLAGS_INIT        "${COMMON_FLAGS} -x assembler-with-cpp"       CACHE STRING "" FORCE)
-set(CMAKE_EXE_LINKER_FLAGS_INIT "-Wl,--gc-sections"                           CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_INIT          "${COMMON_FLAGS} ${C_CXX_FLAGS}"              CACHE INTERNAL "C_FLAGS_INIT")
+set(CMAKE_CXX_FLAGS_INIT        "${COMMON_FLAGS} ${C_CXX_FLAGS} ${CXX_FLAGS}" CACHE INTERNAL "CXX_FLAGS_INIT")
+set(CMAKE_ASM_FLAGS_INIT        "${COMMON_FLAGS} -x assembler-with-cpp"       CACHE INTERNAL "ASM_FLAGS_INIT")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-Wl,--gc-sections"                           CACHE INTERNAL "EXE_LINKER_FLAGS_INIT")
 
-
-set(CMAKE_C_FLAGS_DEBUG     "-O0 -g"          CACHE STRING "" FORCE)
-set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g"          CACHE STRING "" FORCE)
-set(CMAKE_C_FLAGS_RELEASE   "-Os -DNDEBUG"    CACHE STRING "" FORCE)
-set(CMAKE_CXX_FLAGS_RELEASE "-Os -DNDEBUG"    CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_DEBUG         "-O0 -g"                                      CACHE INTERNAL "C_FLAGS_DEBUG")
+set(CMAKE_CXX_FLAGS_DEBUG       "-O0 -g -fno-omit-frame-pointer"              CACHE INTERNAL "CXX_FLAGS_DEBUG")
+set(CMAKE_C_FLAGS_RELEASE       "-O2 -DNDEBUG"                                CACHE INTERNAL "C_FLAGS_RELEASE")
+set(CMAKE_CXX_FLAGS_RELEASE     "-O2 -DNDEBUG"                                CACHE INTERNAL "CXX_FLAGS_RELEASE")
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)

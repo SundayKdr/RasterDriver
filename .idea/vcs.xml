@@ -2,6 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Libs/async_tim_tasks" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/Libs/embedded_hw_utils" vcs="Git" />
   </component>
 </project>

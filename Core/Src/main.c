@@ -1,4 +1,6 @@
 /* USER CODE BEGIN Header */
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 /**
   ******************************************************************************
   * @file           : main.c
@@ -97,14 +99,14 @@ int main(void)
   MX_IWDG_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-    AppInit();
+  AppInit();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-     AppLoop();
+    AppLoop();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

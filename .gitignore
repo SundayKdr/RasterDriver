@@ -1,3 +1,4 @@
 /cmake-build-*/
+/.PVS-Studio/
 .mxproject
 Makefile

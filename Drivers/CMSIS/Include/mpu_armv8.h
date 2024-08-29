@@ -208,7 +208,7 @@ __STATIC_INLINE void ARM_MPU_SetMemAttr(uint8_t idx, uint8_t attr)
 */
 __STATIC_INLINE void ARM_MPU_SetMemAttr_NS(uint8_t idx, uint8_t attr)
 {
-  ARM_MPU_SetMemAttrEx(MPU_NS, idx, attr);
+  ARM_MPU_SetMemAttrEx(MPU_NS, get_idx, attr);
 }
 #endif
 
