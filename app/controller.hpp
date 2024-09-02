@@ -33,7 +33,7 @@ public:
     }
 
     void UpdateConfig(){
-        auto& config = getDIPConfig();
+        auto config = getDIPConfig();
         oscillation_enabled_ = config.oscillation_enabled;
         motor_controller_.UpdateConfig(config);
     }
@@ -125,6 +125,7 @@ public:
                 case State::moving_home:
                     StopMotor();
                     ChangeDeviceState(State::grid_home);
+                    motor_controller_.StandByModeOn();
                     break;
                 case State::oscillation:
                     CorrectExpoSteps();
@@ -146,6 +147,7 @@ public:
                 case State::moving_in_field:
                     StopMotor();
                     ChangeDeviceState(State::grid_in_field);
+                    motor_controller_.StandByModeOn();
                     break;
                 default:
                     break;
@@ -239,16 +241,21 @@ public:
     }
 
     void StartOscillation(){
-        lastPosition_ = current_state_;
-        ChangeDeviceState(State::oscillation);
-        motor_controller_.Exposition();
+        ChangeDeviceState(State::service_moving);
+        motor_controller_.MoveToPos(Dir::FORWARD, EXPO_OFFSET_STEPS);
+        pending_move_ = [&]{
+            lastPosition_ = State::grid_in_field;
+            ChangeDeviceState(State::oscillation);
+            motor_controller_.Exposition();
+        };
     }
 
     bool IsInMotionSigReady(){
-        auto dir = motor_controller_.CurrentDirection() == StepperMotor::Direction::FORWARD;
-        auto in_mode = motor_controller_.CurrentMoveMode() == StepperMotor::ACCEL;
-        auto in_time = motor_controller_.GetAccelTimeGap() <= IN_MOTION_uSec_DELAY;
-        return in_mode && in_time && dir;
+//        auto dir = motor_controller_.CurrentDirection() == StepperMotor::Direction::BACKWARDS;
+        auto event = motor_controller_.GetEvent() == StepperMotor::EVENT_CSS;
+        auto in_time = motor_controller_.TimeOfAccelPhase() >= IN_MOTION_uSec_DELAY;
+//        return in_mode && in_time && dir;
+        return event && in_time;
     }
 
     void ExpositionProcedure(){
@@ -280,7 +287,8 @@ public:
                 default:
                     break;
             }
-        }else
+        }
+        else
             FinishExpoProcedure();
     }
 

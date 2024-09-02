@@ -23,7 +23,7 @@ public:
         kDecel_and_stop
     };
 
-    void UpdateConfig(AppCfg& cfg){
+    void UpdateConfig(AppCfg cfg){
         SetDirInversion(cfg.direction_inverted);
         AccelMotor::UpdateConfig(cfg.accelCfg);
     }
@@ -60,7 +60,6 @@ public:
     void Exposition(StepperMotor::Direction dir = StepperMotor::Direction::BACKWARDS){
         current_state_ = MoveMode::kExpo;
         MakeMotorTask(INITIAL_SPEED, config_Vmax_, dir, expo_distance_steps_);
-        StepsCorrectionHack();
     }
 
     void ChangeDirAbnormalExpo(){
@@ -84,7 +83,7 @@ public:
     }
 
 private:
-    MotorController(AppCfg& cfg)
+    MotorController(AppCfg cfg)
         :AccelMotor(cfg.accelCfg)
     {
         UpdateConfig(cfg);
@@ -96,16 +95,14 @@ private:
     MoveMode current_state_;
 
     void AppCorrection() override{
-        auto steps_to_go = static_cast<int>(StepsToGo());
-        auto current_step = static_cast<int>(CurrentStep());
         switch (current_state_){
             case MoveMode::kExpo:
-                if(current_step >= steps_to_go)
+                if(CurrentStep() >= StepsToGo())
                     ChangeDirection();
                 break;
             case MoveMode::kService_slow:
             case MoveMode::kSwitch_press:
-                if(current_step >= steps_to_go)
+                if(CurrentStep() >= StepsToGo())
                     StopMotor();
                 break;
             case MoveMode::kService_accel:

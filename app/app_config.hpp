@@ -8,19 +8,19 @@
 #define $DriverMicroStep                    float(16)
 
 #define TOTAL_RANGE_STEPS                   $mSTEPS(562)     //total steps before abnormal error stop (switch is missing)
-#define STEPS_BEFORE_DECCEL                 $mSTEPS(456)     //steps before deceleration in max long rage move (from edge to edge)
+#define STEPS_BEFORE_DECCEL                 $mSTEPS(475)     //steps before deceleration in max long rage move (from edge to edge)
 #define EXPO_RANGE_STEPS                    $mSTEPS(18.75)   //steps in expo move before changing direction
 #define EXPO_OFFSET_STEPS                   $mSTEPS(9.375)   //steps to run inside park zone (to center expo move)
 #define SWITCH_PRESS_STEPS                  $mSTEPS(3)       //steps to run inside park zone on end of move (ensure not to lose switch while bouncing etc.)
 #define RUN_OUT_STEPS                       $mSTEPS(15)      //steps running out of the parking zone and returning for correct parking
 
 #define INITIAL_SPEED                       $mSTEPS(31.25)   //start speed at every move
-#define CONFIG1_MAX_SPEED                   $mSTEPS(120)     //max speed in acceleration moves
+#define CONFIG1_MAX_SPEED                   $mSTEPS(130)     //max speed in acceleration moves
 #define CONFIG2_MAX_SPEED                   $mSTEPS(150)
-#define CONFIG1_RAMP_TIME                   $rampT_(10)      //optimal acceleration phase width multiplier
-#define CONFIG2_RAMP_TIME                   $rampT_(10)      //optimal acceleration phase width multiplier
+#define CONFIG1_RAMP_TIME                   $rampT_(4)      //optimal acceleration phase width multiplier
+#define CONFIG2_RAMP_TIME                   $rampT_(4)      //optimal acceleration phase width multiplier
 #define CONFIG1_ACCELERATION                $mSTEPS(2.5)     //acceleration only for kParabolic
-#define CONFIG2_ACCELERATION                $mSTEPS(2.0)     //acceleration only for kParabolic
+#define CONFIG2_ACCELERATION                $mSTEPS(3.5)     //acceleration only for kParabolic
 
 #define SERVICE_MOVE_MAX_SPEED              $mSTEPS(150)
 #define INIT_MOVE_MAX_SPEED                 $mSTEPS(90)
@@ -31,7 +31,7 @@
 //                                      MotorSpecial::AccelType::kConstantPower
 //                                      MotorSpecial::AccelType::kSigmoid
 
-#define IN_MOTION_uSec_DELAY            1'000   //time gap in uSec before accel phase end (to set out in_motion sig)
+#define IN_MOTION_uSec_DELAY            1000   //time gap in uSec before accel phase end (to set out in_motion sig)
 #define IN_MOTION_mSec_DELAY            (IN_MOTION_uSec_DELAY / 1000)
 
 struct AppCfg{
@@ -61,8 +61,8 @@ auto getBaseConfig(){
     return appCfg;
 }
 
-auto& getDIPConfig(){
-    static auto cfg = getBaseConfig();
+auto getDIPConfig(){
+    auto cfg = getBaseConfig();
     if(HAL_GPIO_ReadPin(CONFIG_1_GPIO_Port, CONFIG_1_Pin)){
         cfg.accelCfg.Vmax = CONFIG1_MAX_SPEED;
         cfg.accelCfg.A = CONFIG1_ACCELERATION;
